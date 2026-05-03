@@ -20,6 +20,7 @@ import {
   onAuthStateChanged,
   User
 } from 'firebase/auth';
+import bcrypt from 'bcryptjs';
 import { 
   Search, 
   ShoppingCart, 
@@ -46,7 +47,11 @@ import {
   Upload,
   ListChecks,
   CheckCircle2,
-  Clock
+  Clock,
+  Lock,
+  User as UserIcon,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -104,6 +109,12 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
 }
 
 export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loginForm, setLoginForm] = useState({ username: '', password: '' });
+  const [loginError, setLoginError] = useState('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
   const [user, setUser] = useState<any>({
     displayName: 'Kasir',
     photoURL: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Felix',
@@ -143,6 +154,7 @@ export default function App() {
 
   // Menu Listener
   useEffect(() => {
+    if (!isAuthenticated) return;
     const q = query(collection(db, 'menu'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MenuItem));
@@ -155,10 +167,11 @@ export default function App() {
     }, (err) => handleFirestoreError(err, OperationType.GET, 'menu'));
 
     return () => unsubscribe();
-  }, []);
+  }, [isAuthenticated]);
 
   // Queue Listener
   useEffect(() => {
+    if (!isAuthenticated) return;
     const q = query(
       collection(db, 'transactions'),
       orderBy('createdAt', 'asc')
@@ -171,7 +184,7 @@ export default function App() {
     }, (err) => handleFirestoreError(err, OperationType.GET, 'transactions'));
 
     return () => unsubscribe();
-  }, []);
+  }, [isAuthenticated]);
 
   const seedInitialMenu = async () => {
     const initialItems = [
@@ -190,10 +203,46 @@ export default function App() {
     }
   };
 
-  const handleLogin = () => {};
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError('');
+    setIsLoggingIn(true);
+
+    // Credential requirements:
+    // Username: MirahEcho
+    // Password: 123Admin
+    
+    const validUsername = 'MirahEcho';
+    const validPassword = '123Admin';
+
+    // Small delay for realism
+    setTimeout(() => {
+      if (loginForm.username !== validUsername) {
+        setLoginError('Username tidak ditemukan');
+        setIsLoggingIn(false);
+        return;
+      }
+
+      if (loginForm.password === validPassword) {
+        setIsAuthenticated(true);
+        setUser({
+          displayName: 'MirahEcho Admin',
+          photoURL: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Felix',
+          email: 'admin@mirahecho.com'
+        });
+      } else {
+        setLoginError('Password yang Anda masukkan salah');
+      }
+      setIsLoggingIn(false);
+    }, 600);
+  };
+
   const handleLogout = () => {
-    // Just reset states if needed, but for now we keep the session
-    alert("Fitur logout dinonaktifkan dalam mode tanpa login.");
+    if (confirm('Apakah Anda yakin ingin keluar?')) {
+      setIsAuthenticated(false);
+      setLoginForm({ username: '', password: '' });
+      setLoginError('');
+    }
   };
 
   const addToCart = (item: MenuItem) => {
@@ -505,6 +554,106 @@ export default function App() {
       window.print();
     }, 100);
   };
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-[#fdfbf7] flex items-center justify-center p-4 relative overflow-hidden">
+        {/* Decorative elements */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-[#5A5A40]/5 rounded-full blur-[100px]" />
+          <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-[#5A5A40]/5 rounded-full blur-[120px]" />
+        </div>
+
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="w-full max-w-md z-10"
+        >
+          <div className="bg-white rounded-[40px] p-8 lg:p-12 shadow-2xl shadow-[#5A5A40]/10 border border-[#f0f0e8] relative overflow-hidden">
+            <div className="flex flex-col items-center mb-10">
+              <div className="w-20 h-20 bg-[#5A5A40] rounded-[28px] flex items-center justify-center mb-6 shadow-xl shadow-[#5A5A40]/20">
+                <ChefHat className="w-10 h-10 text-white" />
+              </div>
+              <h1 className="text-3xl font-serif font-black text-[#2a2a1b] mb-2 text-center leading-tight">Mirah Echo</h1>
+              <p className="text-[#8a8a70] text-[10px] font-black uppercase tracking-[0.2em] text-center">Sistem Kasir Aman</p>
+            </div>
+
+            <form onSubmit={handleLogin} className="space-y-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-[#5A5A40] uppercase tracking-widest ml-1">Username</label>
+                <div className="relative">
+                  <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#8a8a70]" />
+                  <input 
+                    type="text" 
+                    required
+                    value={loginForm.username}
+                    onChange={(e) => setLoginForm({ ...loginForm, username: e.target.value })}
+                    placeholder="Masukkan username"
+                    className="w-full pl-12 pr-4 py-4 bg-[#fcfcf9] border border-[#e5e5d1] rounded-2xl focus:ring-4 focus:ring-[#5A5A40]/10 transition-all outline-none font-medium text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-[#5A5A40] uppercase tracking-widest ml-1">Password</label>
+                <div className="relative">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#8a8a70]" />
+                  <input 
+                    type={showPassword ? "text" : "password"}
+                    required
+                    value={loginForm.password}
+                    onChange={(e) => setLoginForm({ ...loginForm, password: e.target.value })}
+                    placeholder="••••••••"
+                    className="w-full pl-12 pr-12 py-4 bg-[#fcfcf9] border border-[#e5e5d1] rounded-2xl focus:ring-4 focus:ring-[#5A5A40]/10 transition-all outline-none font-medium text-sm"
+                  />
+                  <button 
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 p-1 text-[#8a8a70] hover:text-[#5A5A40] transition-colors"
+                  >
+                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  </button>
+                </div>
+              </div>
+
+              {loginError && (
+                <motion.div 
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="p-4 bg-red-50 border border-red-100 rounded-2xl flex items-center gap-3 text-red-600 text-xs font-medium"
+                >
+                  <X className="w-5 h-5 shrink-0" />
+                  {loginError}
+                </motion.div>
+              )}
+
+              <button 
+                type="submit"
+                disabled={isLoggingIn}
+                className="w-full bg-[#5A5A40] hover:bg-[#4a4a35] text-white font-bold py-5 rounded-2xl transition-all shadow-xl shadow-[#5A5A40]/20 flex items-center justify-center gap-3 disabled:opacity-70 disabled:cursor-not-allowed group"
+              >
+                {isLoggingIn ? (
+                  <div className="w-6 h-6 border-4 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <>
+                    <span className="text-sm">Masuk Sistem</span>
+                    <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                  </>
+                )}
+              </button>
+            </form>
+
+            <div className="mt-10 pt-8 border-t border-[#f0f0e8] text-center">
+              <p className="text-[10px] text-[#8a8a70] italic">
+                &copy; 2026 Nasi Pecel Madiun Mirah Echo. <br/>
+                Backend Secured with Firestore
+              </p>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#fdfbf7] flex flex-col md:flex-row font-sans text-[#3d3d3d] overflow-hidden">
