@@ -823,8 +823,8 @@ export default function App() {
                     <UtensilsCrossed className="w-10 h-10" />
                   </div>
                   <h2 className="text-xl font-serif font-bold text-[#1a1a1a] leading-tight uppercase tracking-tight">Nasi pecel Madiun Mirah Echo</h2>
-                  <p className="text-[11px] text-[#555] font-medium mt-1">Jl. Raya Madiun No. 88, Jawa Timur</p>
-                  <p className="text-[11px] text-[#555] font-medium">Telp: (021) 1234-5678</p>
+                  <p className="text-[11px] text-[#555] font-medium mt-1">Jl. Jatikramat Indah 2 No.38c RT.005/RW.003 </p>
+                  <p className="text-[11px] text-[#555] font-medium">Telp: 0812-1882-4223</p>
                   <div className="my-5 border-t border-dashed border-[#d1d1c1] w-full" />
                 </div>
 
