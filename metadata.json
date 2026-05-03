@@ -1,0 +1,6 @@
+{
+  "name": "Kasir Kita - POS Restoran",
+  "description": "Sistem kasir restoran modern berbasis tablet dengan manajemen transaksi, pembayaran QRIS/Tunai, dan cetak struk.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}

@@ -1,0 +1,889 @@
+import React, { useState, useEffect, useMemo } from 'react';
+import { 
+  collection, 
+  query, 
+  onSnapshot, 
+  addDoc, 
+  serverTimestamp, 
+  setDoc,
+  doc,
+  getDocFromServer,
+  deleteDoc,
+  updateDoc,
+  getDocs,
+  orderBy
+} from 'firebase/firestore';
+import { 
+  getAuth, 
+  signInWithPopup, 
+  GoogleAuthProvider, 
+  onAuthStateChanged,
+  User
+} from 'firebase/auth';
+import { 
+  Search, 
+  ShoppingCart, 
+  Plus, 
+  Minus, 
+  Trash2, 
+  CreditCard, 
+  Banknote,
+  UtensilsCrossed,
+  Coffee,
+  Cookie,
+  Settings as SettingsIcon,
+  ChefHat,
+  Printer,
+  ChevronRight,
+  LogOut,
+  X,
+  FileSpreadsheet,
+  FileText
+} from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
+import { motion, AnimatePresence } from 'motion/react';
+import { format } from 'date-fns';
+import { id } from 'date-fns/locale';
+
+import { db, auth } from './lib/firebase';
+import { cn, formatCurrency } from './lib/utils';
+
+import * as XLSX from 'xlsx';
+
+// Types
+interface MenuItem {
+  id: string;
+  name: string;
+  price: number;
+  category: string;
+  imageUrl?: string;
+  description?: string;
+}
+
+interface CartItem extends MenuItem {
+  quantity: number;
+}
+
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: any;
+}
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+    },
+    operationType,
+    path
+  }
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
+
+export default function App() {
+  const [user, setUser] = useState<User | null>(null);
+  const [menu, setMenu] = useState<MenuItem[]>([]);
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [activeCategory, setActiveCategory] = useState<string>('Semua');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'QRIS' | null>(null);
+  const [isReceiptOpen, setIsReceiptOpen] = useState(false);
+  const [lastTransaction, setLastTransaction] = useState<any>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isManagementOpen, setIsManagementOpen] = useState(false);
+  const [managementTab, setManagementTab] = useState<'Menu' | 'Transaksi' | 'Settings'>('Menu');
+  const [qrisPayload, setQrisPayload] = useState('https://qris.example.com/payment');
+  const [editingItem, setEditingItem] = useState<Partial<MenuItem> | null>(null);
+
+  // Auth Listener
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (u) => {
+      setUser(u);
+      if (u) {
+        setIsAdmin(u.email === 'rizqy.rs74@gmail.com');
+      }
+    });
+
+    // Test connection
+    const testConnection = async () => {
+      try {
+        await getDocFromServer(doc(db, 'test', 'connection'));
+      } catch (error) {
+        if (error instanceof Error && error.message.includes('the client is offline')) {
+          console.error("Please check your Firebase configuration.");
+        }
+      }
+    };
+    testConnection();
+
+    return () => unsubscribe();
+  }, []);
+
+  // Menu Listener
+  useEffect(() => {
+    if (!user) return;
+    const q = query(collection(db, 'menu'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MenuItem));
+      setMenu(items);
+
+      // Seed initial data if empty
+      if (items.length === 0 && user?.email === 'rizqy.rs74@gmail.com') {
+        seedInitialMenu();
+      }
+    }, (err) => handleFirestoreError(err, OperationType.GET, 'menu'));
+
+    // Fetch settings
+    const fetchSettings = async () => {
+      try {
+        const snap = await getDocFromServer(doc(db, 'settings', 'config'));
+        if (snap.exists()) {
+          setQrisPayload(snap.data().qrisPayload || qrisPayload);
+        }
+      } catch (e) {
+        console.error("Settings not found", e);
+      }
+    };
+    fetchSettings();
+
+    return () => unsubscribe();
+  }, [user]);
+
+  const seedInitialMenu = async () => {
+    const initialItems = [
+      { name: 'Nasi Goreng Spesial', price: 25000, category: 'Makanan' },
+      { name: 'Mie Ayam Bakso', price: 20000, category: 'Makanan' },
+      { name: 'Ayam Geprek', price: 18000, category: 'Makanan' },
+      { name: 'Es Teh Manis', price: 5000, category: 'Minuman' },
+      { name: 'Kopi Susu Gula Aren', price: 15000, category: 'Minuman' },
+      { name: 'Jus Alpukat', price: 12000, category: 'Minuman' },
+      { name: 'Tempe Mendoan', price: 10000, category: 'Snak' },
+      { name: 'Pisang Goreng Keju', price: 15000, category: 'Snak' },
+    ];
+
+    for (const item of initialItems) {
+      await addDoc(collection(db, 'menu'), item);
+    }
+  };
+
+  const handleLogin = async () => {
+    const provider = new GoogleAuthProvider();
+    try {
+      await signInWithPopup(auth, provider);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleLogout = () => auth.signOut();
+
+  const addToCart = (item: MenuItem) => {
+    setCart(prev => {
+      const existing = prev.find(i => i.id === item.id);
+      if (existing) {
+        return prev.map(i => i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i);
+      }
+      return [...prev, { ...item, quantity: 1 }];
+    });
+  };
+
+  const removeFromCart = (id: string) => {
+    setCart(prev => prev.filter(i => i.id !== id));
+  };
+
+  const updateQuantity = (id: string, delta: number) => {
+    setCart(prev => prev.map(i => {
+      if (i.id === id) {
+        const newQty = Math.max(1, i.quantity + delta);
+        return { ...i, quantity: newQty };
+      }
+      return i;
+    }));
+  };
+
+  const cartTotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+
+  const exportToExcel = async () => {
+    try {
+      const q = query(collection(db, 'transactions'), orderBy('createdAt', 'desc'));
+      const snap = await getDocs(q);
+      const data = snap.docs.map(doc => {
+        const d = doc.data();
+        return {
+          'Order ID': doc.id,
+          'Waktu': d.createdAt?.toDate() ? format(d.createdAt.toDate(), 'yyyy-MM-dd HH:mm:ss') : '-',
+          'Metode': d.paymentMethod,
+          'Total': d.total,
+          'Items': d.items.map((i: any) => `${i.name} (${i.quantity})`).join(', ')
+        };
+      });
+
+      const worksheet = XLSX.utils.json_to_sheet(data);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Penjualan");
+      XLSX.writeFile(workbook, `Laporan_Penjualan_${format(new Date(), 'yyyyMMdd')}.xlsx`);
+    } catch (err) {
+      console.error(err);
+      alert("Gagal mengekspor data");
+    }
+  };
+
+  const saveMenu = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingItem) return;
+    
+    try {
+      if (editingItem.id) {
+        const { id, ...data } = editingItem;
+        await updateDoc(doc(db, 'menu', id), data);
+      } else {
+        await addDoc(collection(db, 'menu'), editingItem);
+      }
+      setEditingItem(null);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const deleteMenuItem = async (id: string) => {
+    if (!confirm('Hapus menu ini?')) return;
+    try {
+      await deleteDoc(doc(db, 'menu', id));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const saveSettings = async () => {
+    try {
+      await setDoc(doc(db, 'settings', 'config'), { qrisPayload }, { merge: true });
+      alert("Pengaturan tersimpan");
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const filteredMenu = useMemo(() => {
+    return menu.filter(item => {
+      const matchesCategory = activeCategory === 'Semua' || item.category === activeCategory;
+      const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesCategory && matchesSearch;
+    });
+  }, [menu, activeCategory, searchQuery]);
+
+  const handleCheckout = async () => {
+    if (cart.length === 0) return;
+    setIsPaymentModalOpen(true);
+  };
+
+  const processPayment = async (method: 'Cash' | 'QRIS') => {
+    setPaymentMethod(method);
+    const transactionData = {
+      items: cart.map(i => ({ name: i.name, price: i.price, quantity: i.quantity })),
+      total: cartTotal,
+      paymentMethod: method,
+      createdAt: serverTimestamp()
+    };
+
+    try {
+      const docRef = await addDoc(collection(db, 'transactions'), transactionData);
+      setLastTransaction({ id: docRef.id, ...transactionData, createdAt: new Date() });
+      setCart([]);
+      setIsPaymentModalOpen(false);
+      setIsReceiptOpen(true);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.CREATE, 'transactions');
+    }
+  };
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white p-8 rounded-3xl shadow-xl max-w-md w-full text-center"
+        >
+          <div className="w-20 h-20 bg-[#f0f0e8] rounded-2xl flex items-center justify-center mx-auto mb-6">
+            <ChefHat className="w-10 h-10 text-[#5A5A40]" />
+          </div>
+          <h1 className="text-3xl font-serif font-bold text-[#2a2a1b] mb-2">Kasir Kita</h1>
+          <p className="text-[#8a8a70] mb-8 font-medium">Sistem POS Restoran Modern</p>
+          <button 
+            onClick={handleLogin}
+            className="w-full bg-[#5A5A40] hover:bg-[#4a4a35] text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-[#5A5A40]/10 flex items-center justify-center gap-2"
+          >
+            Masuk dengan Google
+          </button>
+          <p className="mt-6 text-xs text-gray-400">Pastikan akun Google Anda sudah diverifikasi.</p>
+        </motion.div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-[#fdfbf7] flex flex-col md:flex-row font-sans text-[#3d3d3d] overflow-hidden">
+      {/* Sidebar Navigation */}
+      <div className="w-full md:w-24 bg-[#5A5A40] flex md:flex-col items-center py-4 md:py-8 gap-8 px-4 md:px-0 scrollbar-hide overflow-x-auto md:overflow-y-auto">
+        <div className="hidden md:flex flex-col items-center gap-1 mb-4">
+          <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center text-white">
+            <ChefHat className="w-6 h-6" />
+          </div>
+        </div>
+        
+        <nav className="flex md:flex-col gap-4">
+          {[
+            { id: 'Semua', icon: UtensilsCrossed, label: 'Semua' },
+            { id: 'Makanan', icon: ChefHat, label: 'Makan' },
+            { id: 'Minuman', icon: Coffee, label: 'Minum' },
+            { id: 'Snak', icon: Cookie, label: 'Snak' }
+          ].map((cat) => (
+            <button 
+              key={cat.id}
+              onClick={() => setActiveCategory(cat.id)}
+              className={cn(
+                "flex flex-col items-center gap-1 p-3 rounded-2xl transition-all min-w-[70px]",
+                activeCategory === cat.id 
+                  ? "bg-white/10 text-white" 
+                  : "text-white/60 hover:bg-white/5"
+              )}
+            >
+              <cat.icon className="w-6 h-6" />
+              <span className="text-[10px] font-bold uppercase tracking-wider">{cat.label}</span>
+            </button>
+          ))}
+        </nav>
+
+        <div className="mt-auto flex md:flex-col gap-4">
+          {isAdmin && (
+            <button 
+              onClick={() => setIsManagementOpen(true)}
+              className="p-3 rounded-2xl text-white/60 hover:bg-white/5"
+            >
+              <SettingsIcon className="w-6 h-6" />
+            </button>
+          )}
+          <button 
+            onClick={handleLogout}
+            className="p-3 rounded-2xl text-white/60 hover:bg-red-500/20 hover:text-red-200"
+          >
+            <LogOut className="w-6 h-6" />
+          </button>
+        </div>
+      </div>
+
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
+        {/* Header */}
+        <header className="shrink-0 h-20 bg-[#fdfbf7] px-6 flex items-center justify-between z-10 border-b border-[#f0f0e8]">
+          <div className="flex flex-col">
+            <h2 className="text-2xl font-serif font-bold text-[#2a2a1b] leading-tight">Menu Restoran</h2>
+            <p className="text-[10px] text-[#8a8a70] font-bold uppercase tracking-[0.2em]">{format(new Date(), 'EEEE, d MMMM yyyy', { locale: id })}</p>
+          </div>
+          
+          <div className="relative max-w-xs lg:max-w-md w-full mx-4">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#8a8a70] w-4 h-4" />
+            <input 
+              type="text" 
+              placeholder="Cari menu favorit..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 bg-white border border-[#e5e5d1] rounded-full focus:ring-2 focus:ring-[#5A5A40]/20 text-sm font-medium transition-all"
+            />
+          </div>
+
+          <div className="flex items-center gap-3 shrink-0">
+             <div className="text-right hidden sm:block">
+               <p className="text-sm font-bold text-[#2a2a1b] leading-none mb-1">{user.displayName}</p>
+               <p className="text-[9px] font-black text-[#5A5A40] uppercase tracking-widest">{isAdmin ? 'Administrator' : 'Kasir Shift'}</p>
+             </div>
+             <img src={user.photoURL || ''} alt="avatar" className="w-10 h-10 rounded-xl object-cover ring-2 ring-white shadow-sm border border-[#e5e5d1]" />
+          </div>
+        </header>
+
+        {/* Menu Grid */}
+        <div className="flex-1 overflow-y-auto p-4 lg:p-6 scrollbar-hide bg-[#fdfbf7]">
+          <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 lg:gap-6 pb-20">
+            <AnimatePresence mode='popLayout'>
+              {filteredMenu.map((item) => (
+                <motion.button
+                  key={item.id}
+                  layout
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  onClick={() => addToCart(item)}
+                  className="bg-white rounded-[28px] p-3 lg:p-4 border border-[#f0f0e8] shadow-sm hover:shadow-lg transition-all text-left flex flex-col group relative overflow-hidden active:scale-95"
+                >
+                  <div className="aspect-[4/3] bg-[#fcfcf9] rounded-2xl mb-3 lg:mb-4 overflow-hidden relative border border-[#f0f0e8]">
+                    {item.imageUrl ? (
+                      <img src={item.imageUrl} alt={item.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-[#e5e5d1]">
+                        <UtensilsCrossed className="w-8 h-8" />
+                      </div>
+                    )}
+                    <div className="absolute top-2 left-2 px-2.5 py-1 bg-white/90 backdrop-blur-sm rounded-full shadow-sm border border-[#f0f0e8]">
+                      <p className="text-[9px] font-black text-[#5A5A40] uppercase tracking-wider">{item.category}</p>
+                    </div>
+                  </div>
+                  <h3 className="font-bold text-[#2a2a1b] text-sm lg:text-base mb-1 line-clamp-1 group-hover:text-[#5A5A40] transition-colors">{item.name}</h3>
+                  <p className="text-[#8a8a70] text-[10px] italic mb-2 line-clamp-1 opacity-70">Pilihan favorit pelanggan</p>
+                  <p className="font-serif font-black text-base lg:text-lg text-[#5A5A40]">{formatCurrency(item.price)}</p>
+                  
+                  <div className="absolute right-3 lg:right-4 bottom-3 lg:bottom-4 w-8 lg:w-9 h-8 lg:h-9 bg-[#5A5A40] text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 transition-all shadow-md shadow-[#5a5a40]/40">
+                    <Plus className="w-4 h-4" />
+                  </div>
+                </motion.button>
+              ))}
+            </AnimatePresence>
+          </div>
+        </div>
+      </div>
+
+      {/* Cart Sidebar */}
+      <aside className="w-full md:w-[320px] lg:w-[400px] bg-white border-l border-[#f0f0e8] flex flex-col h-[50vh] md:h-screen shadow-2xl md:shadow-none z-20">
+        <div className="p-4 lg:p-6 border-b border-[#f0f0e8] flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-[#fdfbf7] rounded-xl flex items-center justify-center border border-[#e5e5d1]">
+              <ShoppingCart className="w-5 h-5 text-[#5A5A40]" />
+            </div>
+            <h2 className="text-lg lg:text-xl font-bold text-[#2a2a1b]">Pesanan</h2>
+           </div>
+           <span className="px-2.5 py-1 bg-[#5A5A40] rounded-full text-[10px] font-black text-white uppercase tracking-tighter">{cart.length} Unit</span>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-4 scrollbar-hide">
+          {cart.length === 0 ? (
+            <div className="h-full flex flex-col items-center justify-center text-center opacity-30 grayscale">
+              <ShoppingCart className="w-16 h-16 mb-4" />
+              <p className="font-bold text-[#2a2a1b]">Siap Melayani</p>
+              <p className="text-sm">Pilih menu untuk memulai pesanan</p>
+            </div>
+          ) : (
+            cart.map((item) => (
+              <motion.div 
+                key={item.id}
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="flex gap-4 group"
+              >
+                <div className="w-16 h-16 bg-[#fdfbf7] rounded-xl shrink-0 overflow-hidden border border-[#f0f0e8]">
+                  {item.imageUrl && <img src={item.imageUrl} className="w-full h-full object-cover" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-bold text-sm truncate text-[#2a2a1b]">{item.name}</h4>
+                  <p className="font-serif font-bold text-[#5A5A40] text-sm">{formatCurrency(item.price)}</p>
+                  <div className="flex items-center gap-4 mt-2">
+                    <div className="flex items-center bg-[#fdfbf7] border border-[#e5e5d1] rounded-xl p-1">
+                      <button 
+                        onClick={() => updateQuantity(item.id, -1)}
+                        className="p-1 hover:bg-white rounded-lg transition-colors text-[#5A5A40]"
+                      >
+                        <Minus className="w-4 h-4" />
+                      </button>
+                      <span className="w-8 text-center text-xs font-bold">{item.quantity}</span>
+                      <button 
+                        onClick={() => updateQuantity(item.id, 1)}
+                        className="p-1 hover:bg-white rounded-lg transition-colors text-[#5A5A40]"
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => removeFromCart(item.id)}
+                  className="text-[#e5e5d1] hover:text-red-500 self-start p-1 transition-colors"
+                >
+                  <Trash2 className="w-5 h-5" />
+                </button>
+              </motion.div>
+            ))
+          )}
+        </div>
+
+        <div className="p-6 bg-[#fcfcf9] border-t border-[#f0f0e8] space-y-4">
+          <div className="space-y-3">
+            <div className="flex justify-between text-[#8a8a70] font-medium text-sm">
+              <span>Subtotal</span>
+              <span>{formatCurrency(cartTotal)}</span>
+            </div>
+            <div className="pt-3 border-t border-dashed border-[#e5e5d1] flex justify-between items-center">
+              <span className="text-lg font-bold text-[#2a2a1b]">Total Bayar</span>
+              <span className="text-2xl font-serif font-bold text-[#5A5A40]">{formatCurrency(cartTotal)}</span>
+            </div>
+          </div>
+          
+          <button 
+            disabled={cart.length === 0}
+            onClick={handleCheckout}
+            className="w-full bg-[#5A5A40] hover:bg-[#4a4a35] disabled:bg-[#e8e8d8] disabled:shadow-none text-white font-bold py-4 rounded-2xl transition-all shadow-lg shadow-[#5A5A40]/10 flex items-center justify-center gap-2 group"
+          >
+            <span>Bayar & Cetak</span>
+            <Printer className="w-5 h-5 group-hover:scale-110 transition-transform" />
+          </button>
+        </div>
+      </aside>
+
+      <AnimatePresence>
+        {isPaymentModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => setIsPaymentModalOpen(false)}
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative bg-white rounded-[40px] p-8 max-w-md w-full shadow-2xl overflow-hidden border border-[#f0f0e8]"
+            >
+              <div className="absolute top-0 right-0 p-4">
+                <button onClick={() => setIsPaymentModalOpen(false)} className="text-[#8a8a70] hover:text-[#3d3d3d]">
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <h2 className="text-2xl font-serif font-bold mb-2 text-center text-[#2a2a1b]">Pilih Pembayaran</h2>
+              <p className="text-[#8a8a70] text-center mb-8">Metode pembayaran pelanggan</p>
+
+              <div className="grid grid-cols-2 gap-4">
+                <button 
+                  onClick={() => processPayment('Cash')}
+                  className="flex flex-col items-center gap-4 p-6 bg-[#fdfbf7] border-2 border-transparent hover:border-[#5A5A40] rounded-3xl transition-all group"
+                >
+                  <div className="w-16 h-16 bg-[#fcfcf9] border border-[#e5e5d1] rounded-2xl flex items-center justify-center text-[#5A5A40] group-hover:scale-110 transition-transform">
+                    <Banknote className="w-8 h-8" />
+                  </div>
+                  <span className="font-bold text-[#2a2a1b]">Tunai</span>
+                </button>
+                <button 
+                  onClick={() => processPayment('QRIS')}
+                  className="flex flex-col items-center gap-4 p-6 bg-[#fdfbf7] border-2 border-transparent hover:border-[#5A5A40] rounded-3xl transition-all group"
+                >
+                  <div className="w-16 h-16 bg-[#fcfcf9] border border-[#e5e5d1] rounded-2xl flex items-center justify-center text-[#5A5A40] group-hover:scale-110 transition-transform">
+                    <CreditCard className="w-8 h-8" />
+                  </div>
+                  <span className="font-bold text-[#2a2a1b]">QRIS</span>
+                </button>
+              </div>
+
+              <div className="mt-8 pt-8 border-t border-dashed border-[#e5e5d1] text-center">
+                <p className="text-xs text-[#8a8a70] mb-1 font-bold uppercase tracking-widest">Total Pesanan</p>
+                <p className="text-4xl font-serif font-bold text-[#5A5A40]">{formatCurrency(cartTotal)}</p>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Receipt Modal (Success) */}
+      <AnimatePresence>
+        {isReceiptOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/80 backdrop-blur-md"
+              onClick={() => setIsReceiptOpen(false)}
+            />
+            <motion.div 
+              id="receipt-print-area"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="relative bg-white rounded-[40px] p-0 max-w-sm w-full shadow-2xl overflow-hidden flex flex-col items-center border border-[#f0f0e8]"
+            >
+              <div className="w-full bg-[#5A5A40] py-6 flex flex-col items-center relative overflow-hidden">
+                <div className="absolute inset-0 opacity-5 flex flex-wrap gap-2 pointer-events-none">
+                  {[...Array(20)].map((_, i) => <ChefHat key={i} className="w-8 h-8 text-white" />)}
+                </div>
+                <div className="w-12 h-12 bg-white/10 backdrop-blur-md rounded-xl flex items-center justify-center text-white mb-2">
+                  <ChefHat className="w-6 h-6" />
+                </div>
+                <h3 className="text-white font-serif font-bold text-xl">Kasir Kita</h3>
+              </div>
+
+              <div className="p-8 w-full">
+                <div className="text-center mb-8 flex flex-col items-center">
+                  <div className="w-16 h-16 bg-[#5A5A40]/10 text-[#5A5A40] rounded-full flex items-center justify-center mb-4">
+                    <ChefHat className="w-10 h-10" />
+                  </div>
+                  <h2 className="text-2xl font-serif font-bold mb-1 text-[#2a2a1b]">Pembayaran Berhasil</h2>
+                  <p className="text-[#8a8a70] text-sm italic">Terima kasih atas kunjungannya</p>
+                  <div className="mt-4 bg-[#fdfbf7] border border-[#e5e5d1] px-4 py-1 rounded-full">
+                    <p className="text-[10px] font-bold text-[#8a8a70] uppercase tracking-widest leading-none">ID: #{lastTransaction?.id?.slice(0, 8)}</p>
+                  </div>
+                </div>
+
+                <div className="space-y-4 text-sm font-medium border-t border-dashed border-[#e5e5d1] pt-6">
+                  <div className="flex justify-between text-[#8a8a70]">
+                    <span>Kasir:</span>
+                    <span className="text-[#2a2a1b] font-bold">{user.displayName}</span>
+                  </div>
+                  <div className="flex justify-between text-[#8a8a70]">
+                    <span>Metode:</span>
+                    <span className="text-[#2a2a1b] font-bold">{lastTransaction?.paymentMethod}</span>
+                  </div>
+                  <div className="flex justify-between text-[#8a8a70]">
+                    <span>Waktu:</span>
+                    <span className="text-[#2a2a1b] font-bold">{lastTransaction?.id ? format(new Date(), 'HH:mm:ss') : '-'}</span>
+                  </div>
+                  <div className="border-t border-[#f0f0e8] pt-4 flex justify-between items-center">
+                    <span className="text-lg font-bold text-[#2a2a1b]">Total Bayar</span>
+                    <span className="text-2xl font-serif font-bold text-[#5A5A40]">{formatCurrency(lastTransaction?.total)}</span>
+                  </div>
+                </div>
+
+                <div className="mt-8 flex gap-3 print:hidden">
+                  <button 
+                    onClick={() => window.print()}
+                    className="flex-1 bg-[#fdfbf7] border border-[#e5e5d1] hover:bg-[#f0f0e8] text-[#5A5A40] font-bold py-4 rounded-2xl flex items-center justify-center gap-2 transition-all"
+                  >
+                    <Printer className="w-5 h-5" />
+                    Cetak
+                  </button>
+                  <button 
+                    onClick={() => setIsReceiptOpen(false)}
+                    className="flex-1 bg-[#5A5A40] hover:bg-[#4a4a35] text-white font-bold py-4 rounded-2xl transition-all shadow-lg shadow-[#5A5A40]/20"
+                  >
+                    Selesai
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Management Modal */}
+      <AnimatePresence>
+        {isManagementOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => setIsManagementOpen(false)}
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="relative bg-white rounded-[40px] p-0 max-w-4xl w-full h-[80vh] shadow-2xl overflow-hidden border border-[#f0f0e8] flex flex-col"
+            >
+              <div className="p-6 border-b border-[#f0f0e8] flex justify-between items-center">
+                <h2 className="text-2xl font-serif font-bold text-[#2a2a1b]">Panel Manajemen</h2>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => setManagementTab('Menu')}
+                    className={cn("px-4 py-2 rounded-xl font-bold text-sm", managementTab === 'Menu' ? "bg-[#5A5A40] text-white" : "bg-gray-100 text-gray-500")}
+                  >
+                    Menu
+                  </button>
+                  <button 
+                    onClick={() => setManagementTab('Transaksi')}
+                    className={cn("px-4 py-2 rounded-xl font-bold text-sm", managementTab === 'Transaksi' ? "bg-[#5A5A40] text-white" : "bg-gray-100 text-gray-500")}
+                  >
+                    Transaksi
+                  </button>
+                  <button 
+                    onClick={() => setManagementTab('Settings')}
+                    className={cn("px-4 py-2 rounded-xl font-bold text-sm", managementTab === 'Settings' ? "bg-[#5A5A40] text-white" : "bg-gray-100 text-gray-500")}
+                  >
+                    QRIS
+                  </button>
+                </div>
+                <button onClick={() => setIsManagementOpen(false)} className="p-2 hover:bg-gray-100 rounded-full">
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6">
+                {managementTab === 'Menu' && (
+                  <div className="space-y-6">
+                    <div className="flex justify-between items-center">
+                      <h3 className="font-bold">Daftar Menu ({menu.length})</h3>
+                      <button 
+                        onClick={() => setEditingItem({ name: '', price: 0, category: 'Makanan' })}
+                        className="bg-[#5A5A40] text-white px-4 py-2 rounded-xl flex items-center gap-2 text-sm font-bold"
+                      >
+                        <Plus className="w-4 h-4" /> Tambah Menu
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {menu.map(item => (
+                        <div key={item.id} className="p-4 bg-[#fdfbf7] border border-[#e5e5d1] rounded-2xl flex justify-between items-center">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center border border-[#f0f0e8] overflow-hidden">
+                              {item.imageUrl ? <img src={item.imageUrl} className="object-cover w-full h-full" /> : <div className="p-2 text-[#e5e5d1]"><ChefHat className="w-full h-full" /></div>}
+                            </div>
+                            <div>
+                              <p className="font-bold text-sm">{item.name}</p>
+                              <p className="text-xs text-[#5A5A40] font-bold">{formatCurrency(item.price)}</p>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <button onClick={() => setEditingItem(item)} className="p-2 hover:bg-white rounded-lg text-blue-600 border border-transparent hover:border-blue-100"><Plus className="w-4 h-4" /></button>
+                            <button onClick={() => deleteMenuItem(item.id)} className="p-2 hover:bg-white rounded-lg text-red-500 border border-transparent hover:border-red-100"><Trash2 className="w-4 h-4" /></button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {managementTab === 'Transaksi' && (
+                  <div className="flex flex-col items-center justify-center p-12 text-center">
+                    <CreditCard className="w-16 h-16 mb-4 opacity-20" />
+                    <h3 className="font-bold mb-2">Pantau Cashflow Anda</h3>
+                    <p className="text-sm text-[#8a8a70] mb-8">Download semua data transaksi dalam format Excel untuk melihat laporan keuangan lengkap</p>
+                    <button 
+                      onClick={exportToExcel}
+                      className="bg-[#5A5A40] text-white px-8 py-4 rounded-2xl flex items-center gap-3 font-bold hover:bg-[#4a4a35] transition-all"
+                    >
+                      <FileSpreadsheet className="w-5 h-5" /> Ekspor ke Excel (.xlsx)
+                    </button>
+                  </div>
+                )}
+
+                {managementTab === 'Settings' && (
+                  <div className="max-w-md mx-auto space-y-4 py-8">
+                    <div>
+                      <label className="block text-sm font-bold mb-2 uppercase tracking-widest text-[#8a8a70]">QRIS Payload / URL</label>
+                      <p className="text-xs text-[#8a8a70] mb-4 italic">Masukkan URL pembayaran atau data static QRIS Anda di sini</p>
+                      <input 
+                        type="text" 
+                        value={qrisPayload}
+                        onChange={(e) => setQrisPayload(e.target.value)}
+                        className="w-full px-4 py-3 bg-[#fdfbf7] border border-[#e5e5d1] rounded-xl focus:ring-2 focus:ring-[#5A5A40]/20"
+                        placeholder="https://qris.example.com/pay..."
+                      />
+                    </div>
+                    <button 
+                      onClick={saveSettings}
+                      className="w-full bg-[#5A5A40] text-white py-4 rounded-xl font-bold shadow-lg shadow-[#5A5A40]/10"
+                    >
+                      Simpan Pengaturan
+                    </button>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Edit Menu Modal */}
+      <AnimatePresence>
+        {editingItem && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setEditingItem(null)} />
+            <motion.div 
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              className="relative bg-white rounded-[32px] p-8 max-w-md w-full shadow-2xl border border-[#f0f0e8]"
+            >
+              <h2 className="text-xl font-serif font-bold mb-6 text-[#2a2a1b]">{editingItem.id ? 'Edit Menu' : 'Tambah Menu'}</h2>
+              <form onSubmit={saveMenu} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Nama Menu</label>
+                  <input 
+                    required
+                    type="text" 
+                    value={editingItem.name || ''}
+                    onChange={(e) => setEditingItem({...editingItem, name: e.target.value})}
+                    className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Harga</label>
+                  <input 
+                    required
+                    type="number" 
+                    value={editingItem.price || 0}
+                    onChange={(e) => setEditingItem({...editingItem, price: Number(e.target.value)})}
+                    className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Kategori</label>
+                  <select 
+                    value={editingItem.category || 'Makanan'}
+                    onChange={(e) => setEditingItem({...editingItem, category: e.target.value})}
+                    className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl"
+                  >
+                    <option value="Makanan">Makanan</option>
+                    <option value="Minuman">Minuman</option>
+                    <option value="Snak">Snak</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">URL Foto (Optional)</label>
+                  <input 
+                    type="text" 
+                    value={editingItem.imageUrl || ''}
+                    onChange={(e) => setEditingItem({...editingItem, imageUrl: e.target.value})}
+                    className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl"
+                    placeholder="https://image-url.com/food.jpg"
+                  />
+                </div>
+                <div className="flex gap-3 pt-4">
+                  <button type="button" onClick={() => setEditingItem(null)} className="flex-1 py-3 bg-gray-100 font-bold rounded-xl">Batal</button>
+                  <button type="submit" className="flex-1 py-3 bg-[#5A5A40] text-white font-bold rounded-xl shadow-lg shadow-[#5A5A40]/10">Simpan</button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <style>{`
+        @media print {
+          body > :not(#receipt-print-area) {
+            display: none !important;
+          }
+          #receipt-print-area {
+            display: block !important;
+            visibility: visible !important;
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 20px !important;
+          }
+           #receipt-print-area * {
+            visibility: visible !important;
+          }
+          button {
+            display: none !important;
+          }
+        }
+      `}</style>
+    </div>
+  );
+}

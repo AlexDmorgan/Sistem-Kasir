@@ -1,0 +1,56 @@
+{
+  "entities": {
+    "MenuItem": {
+      "title": "Menu Item",
+      "description": "A food or drink item available in the restaurant",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Name of the food/drink" },
+        "price": { "type": "number", "description": "Price in Rupiah" },
+        "category": { "type": "string", "description": "Category (Makanan, Minuman, Snak)" },
+        "imageUrl": { "type": "string", "description": "URL to the item image" },
+        "available": { "type": "boolean", "description": "Is the item currently available?" }
+      },
+      "required": ["name", "price", "category"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "A recorded sale",
+      "type": "object",
+      "properties": {
+        "items": { "type": "array", "description": "List of items sold" },
+        "total": { "type": "number", "description": "Total amount paid" },
+        "paymentMethod": { "type": "string", "description": "Payment method (Cash, QRIS)" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp of transaction" }
+      },
+      "required": ["items", "total", "paymentMethod", "createdAt"]
+    },
+    "StoreSettings": {
+      "title": "Store Settings",
+      "description": "Configuration for the restaurant",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "address": { "type": "string" },
+        "phone": { "type": "string" },
+        "receiptHeader": { "type": "string" },
+        "receiptFooter": { "type": "string" }
+      },
+      "required": ["name"]
+    }
+  },
+  "firestore": {
+    "/menu/{itemId}": {
+      "schema": "MenuItem",
+      "description": "Restaurant menu items"
+    },
+    "/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Sales history"
+    },
+    "/settings/config": {
+      "schema": "StoreSettings",
+      "description": "Global settings for the store"
+    }
+  }
+}

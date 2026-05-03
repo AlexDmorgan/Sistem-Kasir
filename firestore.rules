@@ -1,0 +1,78 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Global Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isVerified() && request.auth.token.email == 'rizqy.rs74@gmail.com';
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Menu Item Validation
+    function isValidMenuItem(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             data.price is number && data.price >= 0 &&
+             data.category is string && (data.category in ['Makanan', 'Minuman', 'Snak']) &&
+             (data.get('imageUrl', '') is string) && (data.get('imageUrl', '').size() <= 500);
+    }
+
+    match /menu/{itemId} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin() && isValidId(itemId) && isValidMenuItem(incoming());
+      allow update: if isAdmin() && isValidMenuItem(incoming()) && (
+        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'price', 'category', 'imageUrl', 'available'])
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Transaction Validation
+    function isValidTransaction(data) {
+      return data.items is list && data.items.size() > 0 && data.items.size() <= 50 &&
+             data.total is number && data.total >= 0 &&
+             data.paymentMethod is string && (data.paymentMethod in ['Cash', 'QRIS']) &&
+             data.createdAt == request.time;
+    }
+
+    match /transactions/{transactionId} {
+      allow read: if isVerified();
+      allow create: if isVerified() && isValidId(transactionId) && isValidTransaction(incoming());
+      allow update, delete: if false; // Transactions are immutable
+    }
+
+    // Settings Validation
+    function isValidSettings(data) {
+      return (data.get('name', '') is string) &&
+             (data.get('address', '') is string) && 
+             (data.get('phone', '') is string) &&
+             (data.get('qrisPayload', '') is string) && (data.get('qrisPayload', '').size() <= 2000);
+    }
+
+    match /settings/config {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() && isValidSettings(incoming());
+    }
+  }
+}
