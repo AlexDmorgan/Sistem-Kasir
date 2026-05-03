@@ -1018,24 +1018,41 @@ export default function App() {
             size: 80mm auto;
           }
           
-          /* Force hide everything except the receipt */
-          body > #root > *:not(.receipt-overlay),
-          .receipt-overlay > *:not(div:last-child),
-          .receipt-overlay button,
-          .print\:hidden {
-            display: none !important;
+          /* Hide everything completely */
+          body * {
+            visibility: hidden !important;
+          }
+
+          /* Show only the printable content */
+          .receipt-overlay, 
+          #printable-receipt,
+          #printable-receipt .printable-content,
+          #printable-receipt .printable-content * {
+            visibility: visible !important;
           }
 
           .receipt-overlay {
-            position: fixed !important;
-            inset: 0 !important;
-            width: 100% !important;
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 80mm !important;
             height: auto !important;
             background: white !important;
             padding: 0 !important;
             margin: 0 !important;
             display: block !important;
-            overflow: visible !important;
+            z-index: 9999 !important;
+          }
+
+          /* Hide header and footer (buttons) within the receipt modal during print */
+          .print-header,
+          .receipt-overlay button,
+          .print\:hidden,
+          .border-t.bg-white.print\:hidden {
+            display: none !important;
+            height: 0 !important;
+            padding: 0 !important;
+            margin: 0 !important;
           }
 
           #printable-receipt {
@@ -1049,34 +1066,27 @@ export default function App() {
             background: white !important;
             transform: none !important;
             border-radius: 0 !important;
-            max-width: none !important;
-            max-height: none !important;
           }
 
           .printable-content {
-            padding: 5mm 3mm !important;
+            padding: 4mm 2mm !important;
             display: block !important;
             overflow: visible !important;
             height: auto !important;
             max-height: none !important;
           }
 
-          .print-header {
-            display: none !important;
-          }
-
           #printable-receipt * {
             color: black !important;
             font-family: 'JetBrains Mono', monospace !important;
-            font-size: 10pt !important;
+            font-size: 8pt !important;
             line-height: 1.2 !important;
           }
 
-          .text-green-700, .text-[#5A5A40] {
+          .text-green-700, .text-[#5A5A40], .text-yellow-500 {
             color: black !important;
           }
           
-          /* Ensure text isn't cut off horizontally */
           .flex {
             display: flex !important;
           }
