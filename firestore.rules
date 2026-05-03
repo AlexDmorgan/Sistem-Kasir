@@ -55,13 +55,14 @@ service cloud.firestore {
              data.paymentMethod is string && (data.paymentMethod in ['Cash', 'QRIS']) &&
              (data.get('cashReceived', 0) is number) &&
              (data.get('change', 0) is number) &&
-             data.createdAt == request.time;
+             (data.get('status', 'waiting') in ['waiting', 'done']);
     }
 
     match /transactions/{transactionId} {
       allow read: if true;
-      allow create: if isValidTransaction(incoming());
-      allow update: if false;
+      allow create: if isValidTransaction(incoming()) && incoming().createdAt == request.time;
+      allow update: if incoming().diff(existing()).affectedKeys().hasOnly(['status']) &&
+                    (incoming().status in ['waiting', 'done']);
       allow delete: if true;
     }
 

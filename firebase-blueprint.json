@@ -21,9 +21,10 @@
         "items": { "type": "array", "description": "List of items sold" },
         "total": { "type": "number", "description": "Total amount paid" },
         "paymentMethod": { "type": "string", "description": "Payment method (Cash, QRIS)" },
+        "status": { "type": "string", "enum": ["waiting", "done"], "description": "Status of the order in the queue" },
         "createdAt": { "type": "string", "format": "date-time", "description": "Timestamp of transaction" }
       },
-      "required": ["items", "total", "paymentMethod", "createdAt"]
+      "required": ["items", "total", "paymentMethod", "createdAt", "status"]
     },
     "StoreSettings": {
       "title": "Store Settings",
