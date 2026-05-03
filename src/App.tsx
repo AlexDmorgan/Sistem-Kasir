@@ -107,9 +107,10 @@ export default function App() {
   const [lastTransaction, setLastTransaction] = useState<any>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isManagementOpen, setIsManagementOpen] = useState(false);
-  const [managementTab, setManagementTab] = useState<'Menu' | 'Transaksi' | 'Settings'>('Menu');
-  const [qrisPayload, setQrisPayload] = useState('https://qris.example.com/payment');
+  const [managementTab, setManagementTab] = useState<'Menu' | 'Transaksi'>('Menu');
   const [editingItem, setEditingItem] = useState<Partial<MenuItem> | null>(null);
+  const [cashReceived, setCashReceived] = useState<number>(0);
+  const [isEnteringCash, setIsEnteringCash] = useState(false);
 
   // Auth Listener
   useEffect(() => {
@@ -148,19 +149,6 @@ export default function App() {
         seedInitialMenu();
       }
     }, (err) => handleFirestoreError(err, OperationType.GET, 'menu'));
-
-    // Fetch settings
-    const fetchSettings = async () => {
-      try {
-        const snap = await getDocFromServer(doc(db, 'settings', 'config'));
-        if (snap.exists()) {
-          setQrisPayload(snap.data().qrisPayload || qrisPayload);
-        }
-      } catch (e) {
-        console.error("Settings not found", e);
-      }
-    };
-    fetchSettings();
 
     return () => unsubscribe();
   }, [user]);
@@ -230,6 +218,8 @@ export default function App() {
           'Waktu': d.createdAt?.toDate() ? format(d.createdAt.toDate(), 'yyyy-MM-dd HH:mm:ss') : '-',
           'Metode': d.paymentMethod,
           'Total': d.total,
+          'Diterima': d.cashReceived || d.total,
+          'Kembalian': d.change || 0,
           'Items': d.items.map((i: any) => `${i.name} (${i.quantity})`).join(', ')
         };
       });
@@ -270,15 +260,6 @@ export default function App() {
     }
   };
 
-  const saveSettings = async () => {
-    try {
-      await setDoc(doc(db, 'settings', 'config'), { qrisPayload }, { merge: true });
-      alert("Pengaturan tersimpan");
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
   const filteredMenu = useMemo(() => {
     return menu.filter(item => {
       const matchesCategory = activeCategory === 'Semua' || item.category === activeCategory;
@@ -290,13 +271,23 @@ export default function App() {
   const handleCheckout = async () => {
     if (cart.length === 0) return;
     setIsPaymentModalOpen(true);
+    setIsEnteringCash(false);
+    setCashReceived(0);
   };
 
   const processPayment = async (method: 'Cash' | 'QRIS') => {
-    setPaymentMethod(method);
+    if (method === 'Cash' && !isEnteringCash) {
+      setIsEnteringCash(true);
+      return;
+    }
+
+    const changeAmount = method === 'Cash' ? Math.max(0, cashReceived - cartTotal) : 0;
+
     const transactionData = {
       items: cart.map(i => ({ name: i.name, price: i.price, quantity: i.quantity })),
       total: cartTotal,
+      cashReceived: method === 'Cash' ? cashReceived : cartTotal,
+      change: changeAmount,
       paymentMethod: method,
       createdAt: serverTimestamp()
     };
@@ -307,6 +298,8 @@ export default function App() {
       setCart([]);
       setIsPaymentModalOpen(false);
       setIsReceiptOpen(true);
+      setCashReceived(0);
+      setIsEnteringCash(false);
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, 'transactions');
     }
@@ -391,13 +384,13 @@ export default function App() {
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
         {/* Header */}
-        <header className="shrink-0 h-20 bg-[#fdfbf7] px-6 flex items-center justify-between z-10 border-b border-[#f0f0e8]">
-          <div className="flex flex-col">
-            <h2 className="text-2xl font-serif font-bold text-[#2a2a1b] leading-tight">Menu Restoran</h2>
-            <p className="text-[10px] text-[#8a8a70] font-bold uppercase tracking-[0.2em]">{format(new Date(), 'EEEE, d MMMM yyyy', { locale: id })}</p>
+        <header className="shrink-0 h-20 bg-[#fdfbf7] px-4 lg:px-6 flex items-center justify-between z-10 border-b border-[#f0f0e8] gap-4">
+          <div className="flex flex-col shrink-0">
+            <h2 className="text-xl lg:text-2xl font-serif font-bold text-[#2a2a1b] leading-tight">Menu Restoran</h2>
+            <p className="text-[9px] lg:text-[10px] text-[#8a8a70] font-bold uppercase tracking-[0.2em]">{format(new Date(), 'EEEE, d MMMM yyyy', { locale: id })}</p>
           </div>
           
-          <div className="relative max-w-xs lg:max-w-md w-full mx-4">
+          <div className="relative max-w-xs flex-1 lg:max-w-md">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#8a8a70] w-4 h-4" />
             <input 
               type="text" 
@@ -408,12 +401,12 @@ export default function App() {
             />
           </div>
 
-          <div className="flex items-center gap-3 shrink-0">
-             <div className="text-right hidden sm:block">
-               <p className="text-sm font-bold text-[#2a2a1b] leading-none mb-1">{user.displayName}</p>
-               <p className="text-[9px] font-black text-[#5A5A40] uppercase tracking-widest">{isAdmin ? 'Administrator' : 'Kasir Shift'}</p>
+          <div className="flex items-center gap-2 lg:gap-3 shrink-0">
+             <div className="text-right hidden md:block max-w-[80px] lg:max-w-none">
+               <p className="text-xs lg:text-sm font-bold text-[#2a2a1b] leading-none mb-1 truncate">{user.displayName}</p>
+               <p className="text-[8px] lg:text-[9px] font-black text-[#5A5A40] uppercase tracking-widest truncate">{isAdmin ? 'Administrator' : 'Kasir Shift'}</p>
              </div>
-             <img src={user.photoURL || ''} alt="avatar" className="w-10 h-10 rounded-xl object-cover ring-2 ring-white shadow-sm border border-[#e5e5d1]" />
+             <img src={user.photoURL || ''} alt="avatar" className="w-8 h-8 lg:w-10 lg:h-10 rounded-xl object-cover ring-2 ring-white shadow-sm border border-[#e5e5d1]" />
           </div>
         </header>
 
@@ -564,29 +557,77 @@ export default function App() {
                 </button>
               </div>
 
-              <h2 className="text-2xl font-serif font-bold mb-2 text-center text-[#2a2a1b]">Pilih Pembayaran</h2>
-              <p className="text-[#8a8a70] text-center mb-8">Metode pembayaran pelanggan</p>
+              {!isEnteringCash ? (
+                <>
+                  <h2 className="text-2xl font-serif font-bold mb-2 text-center text-[#2a2a1b]">Pilih Pembayaran</h2>
+                  <p className="text-[#8a8a70] text-center mb-8">Metode pembayaran pelanggan</p>
 
-              <div className="grid grid-cols-2 gap-4">
-                <button 
-                  onClick={() => processPayment('Cash')}
-                  className="flex flex-col items-center gap-4 p-6 bg-[#fdfbf7] border-2 border-transparent hover:border-[#5A5A40] rounded-3xl transition-all group"
-                >
-                  <div className="w-16 h-16 bg-[#fcfcf9] border border-[#e5e5d1] rounded-2xl flex items-center justify-center text-[#5A5A40] group-hover:scale-110 transition-transform">
-                    <Banknote className="w-8 h-8" />
+                  <div className="grid grid-cols-2 gap-4">
+                    <button 
+                      onClick={() => processPayment('Cash')}
+                      className="flex flex-col items-center gap-4 p-6 bg-[#fdfbf7] border-2 border-transparent hover:border-[#5A5A40] rounded-3xl transition-all group"
+                    >
+                      <div className="w-16 h-16 bg-[#fcfcf9] border border-[#e5e5d1] rounded-2xl flex items-center justify-center text-[#5A5A40] group-hover:scale-110 transition-transform">
+                        <Banknote className="w-8 h-8" />
+                      </div>
+                      <span className="font-bold text-[#2a2a1b]">Tunai</span>
+                    </button>
+                    <button 
+                      onClick={() => processPayment('QRIS')}
+                      className="flex flex-col items-center gap-4 p-6 bg-[#fdfbf7] border-2 border-transparent hover:border-[#5A5A40] rounded-3xl transition-all group"
+                    >
+                      <div className="w-16 h-16 bg-[#fcfcf9] border border-[#e5e5d1] rounded-2xl flex items-center justify-center text-[#5A5A40] group-hover:scale-110 transition-transform">
+                        <CreditCard className="w-8 h-8" />
+                      </div>
+                      <span className="font-bold text-[#2a2a1b]">QRIS</span>
+                    </button>
                   </div>
-                  <span className="font-bold text-[#2a2a1b]">Tunai</span>
-                </button>
-                <button 
-                  onClick={() => processPayment('QRIS')}
-                  className="flex flex-col items-center gap-4 p-6 bg-[#fdfbf7] border-2 border-transparent hover:border-[#5A5A40] rounded-3xl transition-all group"
-                >
-                  <div className="w-16 h-16 bg-[#fcfcf9] border border-[#e5e5d1] rounded-2xl flex items-center justify-center text-[#5A5A40] group-hover:scale-110 transition-transform">
-                    <CreditCard className="w-8 h-8" />
+                </>
+              ) : (
+                <div className="animate-in slide-in-from-right duration-300">
+                  <h2 className="text-2xl font-serif font-bold mb-2 text-center text-[#2a2a1b]">Bayar Tunai</h2>
+                  <p className="text-[#8a8a70] text-center mb-6">Masukkan jumlah uang diterima</p>
+                  
+                  <div className="space-y-4">
+                    <div className="relative">
+                      <input 
+                        autoFocus
+                        type="number"
+                        placeholder="Jumlah uang..."
+                        onChange={(e) => setCashReceived(Number(e.target.value))}
+                        className="w-full text-3xl font-serif font-bold text-center py-4 bg-[#fdfbf7] border border-[#e5e5d1] rounded-2xl focus:ring-4 focus:ring-[#5A5A40]/10 transition-all outline-none"
+                      />
+                    </div>
+                    
+                    <div className="bg-[#fdfbf7] p-4 rounded-2xl space-y-2 border border-[#f0f0e8]">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-[#8a8a70]">Tagihan:</span>
+                        <span className="font-bold">{formatCurrency(cartTotal)}</span>
+                      </div>
+                      <div className="flex justify-between text-lg">
+                        <span className="text-[#8a8a70] font-medium">Kembalian:</span>
+                        <span className="font-black text-green-600">{formatCurrency(Math.max(0, cashReceived - cartTotal))}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-3">
+                      <button 
+                        onClick={() => setIsEnteringCash(false)}
+                        className="flex-1 py-4 bg-gray-100 font-bold rounded-2xl"
+                      >
+                        Batal
+                      </button>
+                      <button 
+                        disabled={cashReceived < cartTotal}
+                        onClick={() => processPayment('Cash')}
+                        className="flex-[2] py-4 bg-[#5A5A40] text-white font-bold rounded-2xl shadow-lg shadow-[#5A5A40]/20 disabled:bg-gray-300 disabled:shadow-none transition-all"
+                      >
+                        Selesaikan Pembayaran
+                      </button>
+                    </div>
                   </div>
-                  <span className="font-bold text-[#2a2a1b]">QRIS</span>
-                </button>
-              </div>
+                </div>
+              )}
 
               <div className="mt-8 pt-8 border-t border-dashed border-[#e5e5d1] text-center">
                 <p className="text-xs text-[#8a8a70] mb-1 font-bold uppercase tracking-widest">Total Pesanan</p>
@@ -606,71 +647,103 @@ export default function App() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="absolute inset-0 bg-black/80 backdrop-blur-md"
-              onClick={() => setIsReceiptOpen(false)}
             />
             <motion.div 
-              id="receipt-print-area"
+              id="printable-receipt"
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
-              className="relative bg-white rounded-[40px] p-0 max-w-sm w-full shadow-2xl overflow-hidden flex flex-col items-center border border-[#f0f0e8]"
+              className="relative bg-white rounded-[32px] p-0 max-w-[320px] w-full shadow-2xl overflow-hidden flex flex-col items-center border border-[#f0f0e8] max-h-[90vh]"
             >
-              <div className="w-full bg-[#5A5A40] py-6 flex flex-col items-center relative overflow-hidden">
-                <div className="absolute inset-0 opacity-5 flex flex-wrap gap-2 pointer-events-none">
-                  {[...Array(20)].map((_, i) => <ChefHat key={i} className="w-8 h-8 text-white" />)}
+              <div className="shrink-0 w-full bg-[#5A5A40] py-4 flex flex-col items-center relative overflow-hidden print-header">
+                <div className="absolute inset-0 opacity-5 flex flex-wrap gap-1 pointer-events-none">
+                  {[...Array(12)].map((_, i) => <ChefHat key={i} className="w-6 h-6 text-white" />)}
                 </div>
-                <div className="w-12 h-12 bg-white/10 backdrop-blur-md rounded-xl flex items-center justify-center text-white mb-2">
-                  <ChefHat className="w-6 h-6" />
+                <div className="w-10 h-10 bg-white/10 backdrop-blur-md rounded-xl flex items-center justify-center text-white mb-1">
+                  <ChefHat className="w-5 h-5 shadow-sm" />
                 </div>
-                <h3 className="text-white font-serif font-bold text-xl">Kasir Kita</h3>
+                <h3 className="text-white font-serif font-bold text-lg">Kasir Kita</h3>
               </div>
 
-              <div className="p-8 w-full">
-                <div className="text-center mb-8 flex flex-col items-center">
-                  <div className="w-16 h-16 bg-[#5A5A40]/10 text-[#5A5A40] rounded-full flex items-center justify-center mb-4">
-                    <ChefHat className="w-10 h-10" />
-                  </div>
-                  <h2 className="text-2xl font-serif font-bold mb-1 text-[#2a2a1b]">Pembayaran Berhasil</h2>
-                  <p className="text-[#8a8a70] text-sm italic">Terima kasih atas kunjungannya</p>
-                  <div className="mt-4 bg-[#fdfbf7] border border-[#e5e5d1] px-4 py-1 rounded-full">
-                    <p className="text-[10px] font-bold text-[#8a8a70] uppercase tracking-widest leading-none">ID: #{lastTransaction?.id?.slice(0, 8)}</p>
-                  </div>
+              <div className="flex-1 overflow-y-auto p-6 w-full scrollbar-hide printable-content">
+                <div className="text-center mb-4 flex flex-col items-center">
+                  <h2 className="text-xl font-serif font-bold text-[#2a2a1b] leading-tight">STRUK BELANJA</h2>
+                  <p className="text-[10px] text-[#8a8a70] font-medium italic">Sistem POS Restoran Modern</p>
+                  <div className="my-3 border-t border-dashed border-[#e5e5d1] w-full" />
                 </div>
 
-                <div className="space-y-4 text-sm font-medium border-t border-dashed border-[#e5e5d1] pt-6">
+                <div className="space-y-1.5 text-[11px] mb-4">
                   <div className="flex justify-between text-[#8a8a70]">
-                    <span>Kasir:</span>
+                    <span>No. Transaksi</span>
+                    <span className="text-[#2a2a1b] font-bold">#{lastTransaction?.id?.slice(0, 10)}</span>
+                  </div>
+                  <div className="flex justify-between text-[#8a8a70]">
+                    <span>Tanggal</span>
+                    <span className="text-[#2a2a1b] font-bold">{format(lastTransaction?.createdAt || new Date(), 'dd/MM/yyyy HH:mm')}</span>
+                  </div>
+                  <div className="flex justify-between text-[#8a8a70]">
+                    <span>Kasir</span>
                     <span className="text-[#2a2a1b] font-bold">{user.displayName}</span>
                   </div>
-                  <div className="flex justify-between text-[#8a8a70]">
-                    <span>Metode:</span>
-                    <span className="text-[#2a2a1b] font-bold">{lastTransaction?.paymentMethod}</span>
+                </div>
+
+                <div className="border-t border-dashed border-[#e5e5d1] py-3 mb-3">
+                  {lastTransaction?.items.map((item: any, idx: number) => (
+                    <div key={`receipt-item-${idx}`} className="flex justify-between text-[11px] mb-2 text-[#3d3d3d] leading-relaxed">
+                      <span className="flex-1 pr-4">{item.name} <span className="text-[#8a8a70] ml-1">x{item.quantity}</span></span>
+                      <span className="font-bold shrink-0">{formatCurrency(item.price * item.quantity)}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="space-y-1.5 pt-3 border-t border-dashed border-[#e5e5d1]">
+                  <div className="flex justify-between text-[11px] text-[#8a8a70]">
+                    <span>Subtotal</span>
+                    <span className="text-[#2a2a1b] font-bold">{formatCurrency(lastTransaction?.total)}</span>
                   </div>
-                  <div className="flex justify-between text-[#8a8a70]">
-                    <span>Waktu:</span>
-                    <span className="text-[#2a2a1b] font-bold">{lastTransaction?.id ? format(new Date(), 'HH:mm:ss') : '-'}</span>
+                  <div className="flex justify-between text-sm pt-2">
+                    <span className="font-bold text-[#2a2a1b]">TOTAL</span>
+                    <span className="font-serif font-black text-[#5A5A40] text-lg">{formatCurrency(lastTransaction?.total)}</span>
                   </div>
-                  <div className="border-t border-[#f0f0e8] pt-4 flex justify-between items-center">
-                    <span className="text-lg font-bold text-[#2a2a1b]">Total Bayar</span>
-                    <span className="text-2xl font-serif font-bold text-[#5A5A40]">{formatCurrency(lastTransaction?.total)}</span>
+                  
+                  {lastTransaction?.paymentMethod === 'Cash' && (
+                    <>
+                      <div className="flex justify-between text-[11px] text-[#8a8a70] pt-1">
+                        <span>Tunai Diterima</span>
+                        <span className="text-[#2a2a1b] font-bold">{formatCurrency(lastTransaction?.cashReceived)}</span>
+                      </div>
+                      <div className="flex justify-between text-[11px] text-green-600 font-bold pt-0.5">
+                        <span>Kembalian</span>
+                        <span>{formatCurrency(lastTransaction?.change)}</span>
+                      </div>
+                    </>
+                  )}
+                  
+                  <div className="flex justify-between text-[10px] text-[#8a8a70] pt-2 italic">
+                    <span>Metode: {lastTransaction?.paymentMethod}</span>
                   </div>
                 </div>
 
-                <div className="mt-8 flex gap-3 print:hidden">
-                  <button 
-                    onClick={() => window.print()}
-                    className="flex-1 bg-[#fdfbf7] border border-[#e5e5d1] hover:bg-[#f0f0e8] text-[#5A5A40] font-bold py-4 rounded-2xl flex items-center justify-center gap-2 transition-all"
-                  >
-                    <Printer className="w-5 h-5" />
-                    Cetak
-                  </button>
-                  <button 
-                    onClick={() => setIsReceiptOpen(false)}
-                    className="flex-1 bg-[#5A5A40] hover:bg-[#4a4a35] text-white font-bold py-4 rounded-2xl transition-all shadow-lg shadow-[#5A5A40]/20"
-                  >
-                    Selesai
-                  </button>
+                <div className="mt-6 text-center border-t border-dashed border-[#e5e5d1] pt-4 pb-2">
+                  <p className="text-[10px] text-[#8a8a70] font-bold uppercase tracking-widest leading-tight">Terima Kasih</p>
+                  <p className="text-[10px] text-[#8a8a70] italic text-center">Selamat menikmati hidangan Anda!</p>
                 </div>
+              </div>
+
+              <div className="shrink-0 w-full p-6 flex gap-2 border-t border-[#f0f0e8] bg-white print:hidden">
+                <button 
+                  onClick={() => window.print()}
+                  className="flex-1 bg-[#fdfbf7] border border-[#e5e5d1] hover:bg-[#f0f0e8] text-[#5A5A40] font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-all text-sm shadow-sm"
+                >
+                  <Printer className="w-4 h-4" />
+                  Cetak
+                </button>
+                <button 
+                  onClick={() => setIsReceiptOpen(false)}
+                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-500 font-bold py-3 rounded-xl transition-all text-sm"
+                >
+                  Tutup
+                </button>
               </div>
             </motion.div>
           </div>
@@ -708,12 +781,6 @@ export default function App() {
                     className={cn("px-4 py-2 rounded-xl font-bold text-sm", managementTab === 'Transaksi' ? "bg-[#5A5A40] text-white" : "bg-gray-100 text-gray-500")}
                   >
                     Transaksi
-                  </button>
-                  <button 
-                    onClick={() => setManagementTab('Settings')}
-                    className={cn("px-4 py-2 rounded-xl font-bold text-sm", managementTab === 'Settings' ? "bg-[#5A5A40] text-white" : "bg-gray-100 text-gray-500")}
-                  >
-                    QRIS
                   </button>
                 </div>
                 <button onClick={() => setIsManagementOpen(false)} className="p-2 hover:bg-gray-100 rounded-full">
@@ -766,28 +833,6 @@ export default function App() {
                       className="bg-[#5A5A40] text-white px-8 py-4 rounded-2xl flex items-center gap-3 font-bold hover:bg-[#4a4a35] transition-all"
                     >
                       <FileSpreadsheet className="w-5 h-5" /> Ekspor ke Excel (.xlsx)
-                    </button>
-                  </div>
-                )}
-
-                {managementTab === 'Settings' && (
-                  <div className="max-w-md mx-auto space-y-4 py-8">
-                    <div>
-                      <label className="block text-sm font-bold mb-2 uppercase tracking-widest text-[#8a8a70]">QRIS Payload / URL</label>
-                      <p className="text-xs text-[#8a8a70] mb-4 italic">Masukkan URL pembayaran atau data static QRIS Anda di sini</p>
-                      <input 
-                        type="text" 
-                        value={qrisPayload}
-                        onChange={(e) => setQrisPayload(e.target.value)}
-                        className="w-full px-4 py-3 bg-[#fdfbf7] border border-[#e5e5d1] rounded-xl focus:ring-2 focus:ring-[#5A5A40]/20"
-                        placeholder="https://qris.example.com/pay..."
-                      />
-                    </div>
-                    <button 
-                      onClick={saveSettings}
-                      className="w-full bg-[#5A5A40] text-white py-4 rounded-xl font-bold shadow-lg shadow-[#5A5A40]/10"
-                    >
-                      Simpan Pengaturan
                     </button>
                   </div>
                 )}
@@ -862,24 +907,79 @@ export default function App() {
       </AnimatePresence>
 
       <style>{`
+        @media screen {
+          .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+          }
+          .scrollbar-hide {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+          }
+        }
+
         @media print {
-          body > :not(#receipt-print-area) {
+          @page {
+            margin: 0;
+            size: 80mm auto;
+          }
+          
+          html, body {
+            margin: 0 !important;
+            padding: 0 !important;
+            background: white !important;
+          }
+
+          #root > *:not(#printable-receipt-wrapper) {
             display: none !important;
           }
-          #receipt-print-area {
-            display: block !important;
+
+          /* Hide everything by default during print */
+          body > * {
+            visibility: hidden !important;
+          }
+          
+          /* Only show the receipt */
+          #printable-receipt {
             visibility: visible !important;
             position: absolute !important;
             left: 0 !important;
             top: 0 !important;
             width: 100% !important;
+            max-width: none !important;
+            max-height: none !important;
+            height: auto !important;
             margin: 0 !important;
             padding: 20px !important;
+            border: none !important;
+            box-shadow: none !important;
+            display: block !important;
+            overflow: visible !important;
           }
-           #receipt-print-area * {
+
+          #printable-receipt * {
             visibility: visible !important;
+            color: black !important;
           }
-          button {
+
+          /* Ensure scrollable area is fully visible in print */
+          .printable-content {
+            overflow: visible !important;
+            display: block !important;
+            max-height: none !important;
+          }
+
+          .print-header {
+            background-color: #5A5A40 !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            color: white !important;
+          }
+
+          .print-header * {
+            color: white !important;
+          }
+
+          .print\:hidden {
             display: none !important;
           }
         }
