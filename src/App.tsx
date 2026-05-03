@@ -41,7 +41,9 @@ import {
   LogOut,
   X,
   FileSpreadsheet,
-  FileText
+  FileText,
+  Image as ImageIcon,
+  Upload
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -228,17 +230,44 @@ export default function App() {
   const saveMenu = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingItem) return;
+    if (!editingItem.name || editingItem.price === undefined) {
+      alert("Nama and harga harus diisi!");
+      return;
+    }
     
     try {
+      const menuData = {
+        name: editingItem.name,
+        price: Number(editingItem.price),
+        category: editingItem.category || 'Lainnya',
+        imageUrl: editingItem.imageUrl || '',
+        updatedAt: serverTimestamp()
+      };
+
       if (editingItem.id) {
-        const { id, ...data } = editingItem;
-        await updateDoc(doc(db, 'menu', id), data);
+        await updateDoc(doc(db, 'menu', editingItem.id), menuData);
       } else {
-        await addDoc(collection(db, 'menu'), editingItem);
+        await addDoc(collection(db, 'menu'), menuData);
       }
       setEditingItem(null);
     } catch (err) {
       console.error(err);
+      alert("Gagal menyimpan menu. Periksa koneksi atau database.");
+    }
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 800000) { // approx 800KB limit for Firestore base64
+        alert("Gambar terlalu besar! Maksimal 800KB.");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setEditingItem(prev => prev ? { ...prev, imageUrl: reader.result as string } : null);
+      };
+      reader.readAsDataURL(file);
     }
   };
 
@@ -832,13 +861,14 @@ export default function App() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Harga</label>
+                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Harga (Rp)</label>
                   <input 
                     required
                     type="number" 
-                    value={editingItem.price || 0}
-                    onChange={(e) => setEditingItem({...editingItem, price: Number(e.target.value)})}
+                    value={editingItem.price === 0 ? '' : editingItem.price}
+                    onChange={(e) => setEditingItem({...editingItem, price: e.target.value === '' ? 0 : Number(e.target.value)})}
                     className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl"
+                    placeholder="Masukkan harga..."
                   />
                 </div>
                 <div>
@@ -855,14 +885,35 @@ export default function App() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">URL Foto (Optional)</label>
-                  <input 
-                    type="text" 
-                    value={editingItem.imageUrl || ''}
-                    onChange={(e) => setEditingItem({...editingItem, imageUrl: e.target.value})}
-                    className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl"
-                    placeholder="https://image-url.com/food.jpg"
-                  />
+                  <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Foto Menu</label>
+                  <div className="space-y-3">
+                    <div className="flex gap-2">
+                       <input 
+                        type="text" 
+                        value={editingItem.imageUrl || ''}
+                        onChange={(e) => setEditingItem({...editingItem, imageUrl: e.target.value})}
+                        className="flex-1 p-3 bg-gray-50 border border-gray-100 rounded-xl text-sm"
+                        placeholder="Link foto..."
+                      />
+                      <label className="shrink-0 cursor-pointer bg-white border-2 border-dashed border-[#e5e5d1] hover:border-[#5A5A40] text-[#5A5A40] p-3 rounded-xl flex items-center transition-all group">
+                        <Upload className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                        <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
+                      </label>
+                    </div>
+                    
+                    {editingItem.imageUrl && (
+                      <div className="relative w-24 h-24 rounded-xl overflow-hidden border border-[#f0f0e8]">
+                        <img src={editingItem.imageUrl} className="w-full h-full object-cover" alt="Preview" />
+                        <button 
+                          type="button"
+                          onClick={() => setEditingItem({...editingItem, imageUrl: ''})}
+                          className="absolute top-1 right-1 p-1 bg-black/50 text-white rounded-full hover:bg-black/70"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div className="flex gap-3 pt-4">
                   <button type="button" onClick={() => setEditingItem(null)} className="flex-1 py-3 bg-gray-100 font-bold rounded-xl">Batal</button>
