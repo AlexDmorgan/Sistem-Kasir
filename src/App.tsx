@@ -33,6 +33,9 @@ import {
   Cookie,
   Settings as SettingsIcon,
   ChefHat,
+  LayoutGrid,
+  Drumstick,
+  Package,
   Printer,
   ChevronRight,
   LogOut,
@@ -96,7 +99,11 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
 }
 
 export default function App() {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<any>({
+    displayName: 'Kasir Kita',
+    photoURL: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Felix',
+    email: 'admin@kasirkita.com'
+  });
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [activeCategory, setActiveCategory] = useState<string>('Semua');
@@ -105,23 +112,15 @@ export default function App() {
   const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'QRIS' | null>(null);
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
   const [lastTransaction, setLastTransaction] = useState<any>(null);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(true);
   const [isManagementOpen, setIsManagementOpen] = useState(false);
   const [managementTab, setManagementTab] = useState<'Menu' | 'Transaksi'>('Menu');
   const [editingItem, setEditingItem] = useState<Partial<MenuItem> | null>(null);
   const [cashReceived, setCashReceived] = useState<number>(0);
   const [isEnteringCash, setIsEnteringCash] = useState(false);
 
-  // Auth Listener
+  // Connection Test
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      if (u) {
-        setIsAdmin(u.email === 'rizqy.rs74@gmail.com');
-      }
-    });
-
-    // Test connection
     const testConnection = async () => {
       try {
         await getDocFromServer(doc(db, 'test', 'connection'));
@@ -132,37 +131,34 @@ export default function App() {
       }
     };
     testConnection();
-
-    return () => unsubscribe();
   }, []);
 
   // Menu Listener
   useEffect(() => {
-    if (!user) return;
     const q = query(collection(db, 'menu'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MenuItem));
       setMenu(items);
 
       // Seed initial data if empty
-      if (items.length === 0 && user?.email === 'rizqy.rs74@gmail.com') {
+      if (items.length === 0) {
         seedInitialMenu();
       }
     }, (err) => handleFirestoreError(err, OperationType.GET, 'menu'));
 
     return () => unsubscribe();
-  }, [user]);
+  }, []);
 
   const seedInitialMenu = async () => {
     const initialItems = [
-      { name: 'Nasi Goreng Spesial', price: 25000, category: 'Makanan' },
-      { name: 'Mie Ayam Bakso', price: 20000, category: 'Makanan' },
-      { name: 'Ayam Geprek', price: 18000, category: 'Makanan' },
+      { name: 'Nasi Goreng Spesial', price: 25000, category: 'Makanan utama' },
+      { name: 'Mie Ayam Bakso', price: 20000, category: 'Makanan utama' },
+      { name: 'Ayam Goreng Serundeng', price: 18000, category: 'Lauk' },
+      { name: 'Sate Ayam (5 tusuk)', price: 15000, category: 'Lauk' },
       { name: 'Es Teh Manis', price: 5000, category: 'Minuman' },
       { name: 'Kopi Susu Gula Aren', price: 15000, category: 'Minuman' },
-      { name: 'Jus Alpukat', price: 12000, category: 'Minuman' },
-      { name: 'Tempe Mendoan', price: 10000, category: 'Snak' },
-      { name: 'Pisang Goreng Keju', price: 15000, category: 'Snak' },
+      { name: 'Kerupuk Udang', price: 3000, category: 'Lainnya' },
+      { name: 'Sambal Korek Extra', price: 2000, category: 'Lainnya' },
     ];
 
     for (const item of initialItems) {
@@ -170,16 +166,11 @@ export default function App() {
     }
   };
 
-  const handleLogin = async () => {
-    const provider = new GoogleAuthProvider();
-    try {
-      await signInWithPopup(auth, provider);
-    } catch (err) {
-      console.error(err);
-    }
+  const handleLogin = () => {};
+  const handleLogout = () => {
+    // Just reset states if needed, but for now we keep the session
+    alert("Fitur logout dinonaktifkan dalam mode tanpa login.");
   };
-
-  const handleLogout = () => auth.signOut();
 
   const addToCart = (item: MenuItem) => {
     setCart(prev => {
@@ -305,31 +296,6 @@ export default function App() {
     }
   };
 
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-white p-8 rounded-3xl shadow-xl max-w-md w-full text-center"
-        >
-          <div className="w-20 h-20 bg-[#f0f0e8] rounded-2xl flex items-center justify-center mx-auto mb-6">
-            <ChefHat className="w-10 h-10 text-[#5A5A40]" />
-          </div>
-          <h1 className="text-3xl font-serif font-bold text-[#2a2a1b] mb-2">Kasir Kita</h1>
-          <p className="text-[#8a8a70] mb-8 font-medium">Sistem POS Restoran Modern</p>
-          <button 
-            onClick={handleLogin}
-            className="w-full bg-[#5A5A40] hover:bg-[#4a4a35] text-white font-bold py-4 rounded-xl transition-all shadow-lg shadow-[#5A5A40]/10 flex items-center justify-center gap-2"
-          >
-            Masuk dengan Google
-          </button>
-          <p className="mt-6 text-xs text-gray-400">Pastikan akun Google Anda sudah diverifikasi.</p>
-        </motion.div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-[#fdfbf7] flex flex-col md:flex-row font-sans text-[#3d3d3d] overflow-hidden">
       {/* Sidebar Navigation */}
@@ -342,10 +308,11 @@ export default function App() {
         
         <nav className="flex md:flex-col gap-4">
           {[
-            { id: 'Semua', icon: UtensilsCrossed, label: 'Semua' },
-            { id: 'Makanan', icon: ChefHat, label: 'Makan' },
+            { id: 'Semua', icon: LayoutGrid, label: 'Semua' },
+            { id: 'Makanan utama', icon: ChefHat, label: 'Utama' },
+            { id: 'Lauk', icon: Drumstick, label: 'Lauk' },
             { id: 'Minuman', icon: Coffee, label: 'Minum' },
-            { id: 'Snak', icon: Cookie, label: 'Snak' }
+            { id: 'Lainnya', icon: Package, label: 'Lainnya' }
           ].map((cat) => (
             <button 
               key={cat.id}
@@ -794,7 +761,7 @@ export default function App() {
                     <div className="flex justify-between items-center">
                       <h3 className="font-bold">Daftar Menu ({menu.length})</h3>
                       <button 
-                        onClick={() => setEditingItem({ name: '', price: 0, category: 'Makanan' })}
+                        onClick={() => setEditingItem({ name: '', price: 0, category: 'Makanan utama' })}
                         className="bg-[#5A5A40] text-white px-4 py-2 rounded-xl flex items-center gap-2 text-sm font-bold"
                       >
                         <Plus className="w-4 h-4" /> Tambah Menu
@@ -877,13 +844,14 @@ export default function App() {
                 <div>
                   <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Kategori</label>
                   <select 
-                    value={editingItem.category || 'Makanan'}
+                    value={editingItem.category || 'Makanan utama'}
                     onChange={(e) => setEditingItem({...editingItem, category: e.target.value})}
                     className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl"
                   >
-                    <option value="Makanan">Makanan</option>
+                    <option value="Makanan utama">Makanan utama</option>
+                    <option value="Lauk">Lauk</option>
                     <option value="Minuman">Minuman</option>
-                    <option value="Snak">Snak</option>
+                    <option value="Lainnya">Lainnya</option>
                   </select>
                 </div>
                 <div>
