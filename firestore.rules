@@ -8,19 +8,19 @@ service cloud.firestore {
 
     // Global Helpers
     function isSignedIn() {
-      return request.auth != null;
+      return true; // Login removed by user request
     }
 
     function isVerified() {
-      return isSignedIn() && request.auth.token.email_verified == true;
+      return true; // Login removed by user request
     }
 
     function isAdmin() {
-      return isVerified() && request.auth.token.email == 'rizqy.rs74@gmail.com';
+      return true; // Login removed by user request
     }
 
     function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+      return id is string && id.size() <= 128;
     }
 
     function incoming() {
@@ -35,17 +35,17 @@ service cloud.firestore {
     function isValidMenuItem(data) {
       return data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
              data.price is number && data.price >= 0 &&
-             data.category is string && (data.category in ['Makanan', 'Minuman', 'Snak']) &&
-             (data.get('imageUrl', '') is string) && (data.get('imageUrl', '').size() <= 500);
+             data.category is string && (data.category in ['Makanan utama', 'Lauk', 'Minuman', 'Lainnya']) &&
+             (data.get('imageUrl', '') is string) && (data.get('imageUrl', '').size() <= 1048576); // Allow up to 1MB for base64
     }
 
     match /menu/{itemId} {
-      allow read: if isSignedIn();
-      allow create: if isAdmin() && isValidId(itemId) && isValidMenuItem(incoming());
-      allow update: if isAdmin() && isValidMenuItem(incoming()) && (
-        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'price', 'category', 'imageUrl', 'available'])
+      allow read: if true;
+      allow create: if isValidMenuItem(incoming());
+      allow update: if isValidMenuItem(incoming()) && (
+        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'price', 'category', 'imageUrl', 'available', 'updatedAt'])
       );
-      allow delete: if isAdmin();
+      allow delete: if true;
     }
 
     // Transaction Validation
@@ -53,13 +53,15 @@ service cloud.firestore {
       return data.items is list && data.items.size() > 0 && data.items.size() <= 50 &&
              data.total is number && data.total >= 0 &&
              data.paymentMethod is string && (data.paymentMethod in ['Cash', 'QRIS']) &&
+             (data.get('cashReceived', 0) is number) &&
+             (data.get('change', 0) is number) &&
              data.createdAt == request.time;
     }
 
     match /transactions/{transactionId} {
-      allow read: if isVerified();
-      allow create: if isVerified() && isValidId(transactionId) && isValidTransaction(incoming());
-      allow update, delete: if false; // Transactions are immutable
+      allow read: if true;
+      allow create: if isValidTransaction(incoming());
+      allow update, delete: if false;
     }
 
     // Settings Validation
