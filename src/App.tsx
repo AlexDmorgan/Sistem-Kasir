@@ -102,7 +102,7 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
 
 export default function App() {
   const [user, setUser] = useState<any>({
-    displayName: 'Kasir Kita',
+    displayName: 'Kasir',
     photoURL: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Felix',
     email: 'admin@kasirkita.com'
   });
@@ -120,6 +120,7 @@ export default function App() {
   const [editingItem, setEditingItem] = useState<Partial<MenuItem> | null>(null);
   const [cashReceived, setCashReceived] = useState<number>(0);
   const [isEnteringCash, setIsEnteringCash] = useState(false);
+  const [selectedExportDate, setSelectedExportDate] = useState(format(new Date(), 'yyyy-MM-dd'));
 
   // Connection Test
   useEffect(() => {
@@ -202,28 +203,60 @@ export default function App() {
 
   const exportToExcel = async () => {
     try {
-      const q = query(collection(db, 'transactions'), orderBy('createdAt', 'desc'));
+      const startOfDay = new Date(selectedExportDate);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(selectedExportDate);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      const q = query(
+        collection(db, 'transactions'), 
+        orderBy('createdAt', 'desc')
+      );
       const snap = await getDocs(q);
-      const data = snap.docs.map(doc => {
-        const d = doc.data();
-        return {
-          'Order ID': doc.id,
+      
+      const filteredData = snap.docs
+        .map(doc => ({ id: doc.id, ...doc.data() as any }))
+        .filter(d => {
+          if (!d.createdAt) return false;
+          const date = d.createdAt.toDate();
+          return date >= startOfDay && date <= endOfDay;
+        })
+        .map(d => ({
+          'Order ID': d.id,
           'Waktu': d.createdAt?.toDate() ? format(d.createdAt.toDate(), 'yyyy-MM-dd HH:mm:ss') : '-',
           'Metode': d.paymentMethod,
           'Total': d.total,
           'Diterima': d.cashReceived || d.total,
           'Kembalian': d.change || 0,
           'Items': d.items.map((i: any) => `${i.name} (${i.quantity})`).join(', ')
-        };
-      });
+        }));
 
-      const worksheet = XLSX.utils.json_to_sheet(data);
+      if (filteredData.length === 0) {
+        alert("Tidak ada transaksi pada tanggal yang dipilih.");
+        return;
+      }
+
+      const worksheet = XLSX.utils.json_to_sheet(filteredData);
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "Penjualan");
-      XLSX.writeFile(workbook, `Laporan_Penjualan_${format(new Date(), 'yyyyMMdd')}.xlsx`);
+      XLSX.writeFile(workbook, `Laporan_Penjualan_${selectedExportDate}.xlsx`);
     } catch (err) {
       console.error(err);
       alert("Gagal mengekspor data");
+    }
+  };
+
+  const deleteAllTransactions = async () => {
+    if (!confirm('PERINGATAN: Ini akan menghapus SELURUH riwayat transaksi di database. Lanjutkan?')) return;
+    try {
+      const q = query(collection(db, 'transactions'));
+      const snap = await getDocs(q);
+      const deletePromises = snap.docs.map(d => deleteDoc(doc(db, 'transactions', d.id)));
+      await Promise.all(deletePromises);
+      alert("Seluruh transaksi telah dihapus.");
+    } catch (err) {
+      console.error(err);
+      alert("Gagal menghapus data.");
     }
   };
 
@@ -697,10 +730,6 @@ export default function App() {
                     <span className="w-28 text-left">Waktu</span>
                     <span className="flex-1 text-left font-bold">: {formatTransactionDate(lastTransaction?.createdAt, 'HH.mm')}</span>
                   </div>
-                  <div className="flex text-[#333]">
-                    <span className="w-28 text-left">Kasir</span>
-                    <span className="flex-1 text-left font-bold">: {user?.displayName || 'Kasir'}</span>
-                  </div>
                 </div>
 
                 <div className="border-t border-dashed border-[#d1d1c1] py-4 mb-4">
@@ -845,16 +874,38 @@ export default function App() {
                 )}
 
                 {managementTab === 'Transaksi' && (
-                  <div className="flex flex-col items-center justify-center p-12 text-center">
-                    <CreditCard className="w-16 h-16 mb-4 opacity-20" />
-                    <h3 className="font-bold mb-2">Pantau Cashflow Anda</h3>
-                    <p className="text-sm text-[#8a8a70] mb-8">Download semua data transaksi dalam format Excel untuk melihat laporan keuangan lengkap</p>
-                    <button 
-                      onClick={exportToExcel}
-                      className="bg-[#5A5A40] text-white px-8 py-4 rounded-2xl flex items-center gap-3 font-bold hover:bg-[#4a4a35] transition-all"
-                    >
-                      <FileSpreadsheet className="w-5 h-5" /> Ekspor ke Excel (.xlsx)
-                    </button>
+                  <div className="flex flex-col items-center justify-center p-8 text-center max-w-lg mx-auto">
+                    <FileSpreadsheet className="w-16 h-16 mb-4 text-[#5A5A40]" />
+                    <h3 className="font-bold mb-2 text-xl">Laporan Penjualan</h3>
+                    <p className="text-sm text-[#8a8a70] mb-8">Pilih tanggal untuk mengunduh laporan transaksi harian dalam format Excel</p>
+                    
+                    <div className="w-full bg-[#fdfbf7] p-6 rounded-3xl border border-[#e5e5d1] mb-8 space-y-4">
+                      <div>
+                        <label className="block text-xs font-bold text-[#8a8a70] uppercase mb-2">Pilih Tanggal</label>
+                        <input 
+                          type="date" 
+                          value={selectedExportDate}
+                          onChange={(e) => setSelectedExportDate(e.target.value)}
+                          className="w-full p-4 bg-white border border-[#e5e5d1] rounded-2xl font-bold text-[#2a2a1b]"
+                        />
+                      </div>
+                      <button 
+                        onClick={exportToExcel}
+                        className="w-full bg-[#5A5A40] text-white px-8 py-4 rounded-2xl flex items-center justify-center gap-3 font-bold hover:bg-[#4a4a35] transition-all shadow-lg shadow-[#5A5A40]/10"
+                      >
+                        <FileSpreadsheet className="w-5 h-5" /> Download Laporan (.xlsx)
+                      </button>
+                    </div>
+
+                    <div className="pt-8 border-t border-dashed border-gray-200 w-full">
+                      <p className="text-xs text-red-400 mb-4 font-medium italic">Area Berbahaya</p>
+                      <button 
+                        onClick={deleteAllTransactions}
+                        className="text-red-500 text-xs font-bold hover:underline flex items-center gap-2 mx-auto"
+                      >
+                        <Trash2 className="w-3 h-3" /> Hapus Seluruh Riwayat Transaksi
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
