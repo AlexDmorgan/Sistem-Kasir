@@ -117,6 +117,7 @@ export default function App() {
   const [paymentMethod, setPaymentMethod] = useState<'Cash' | 'QRIS' | null>(null);
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
   const [lastTransaction, setLastTransaction] = useState<any>(null);
+  const [isSavingTransaction, setIsSavingTransaction] = useState(false);
   const [isAdmin, setIsAdmin] = useState(true);
   const [isManagementOpen, setIsManagementOpen] = useState(false);
   const [managementTab, setManagementTab] = useState<'Menu' | 'Transaksi' | 'Antrian'>('Antrian');
@@ -459,21 +460,50 @@ export default function App() {
       change: changeAmount,
       paymentMethod: method,
       status: 'waiting',
-      createdAt: serverTimestamp()
+      createdAt: new Date(), // Local date for preview
+      isPending: true
     };
 
-    try {
-      const docRef = await addDoc(collection(db, 'transactions'), transactionData);
-      setLastTransaction({ id: docRef.id, ...transactionData, createdAt: new Date() });
-      setCart([]);
-      setIsPaymentModalOpen(false);
-      setIsReceiptOpen(true);
-      setCashReceived(0);
-      setIsEnteringCash(false);
-    } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, 'transactions');
-      alert("Gagal memproses transaksi. Coba lagi.");
+    setLastTransaction(transactionData);
+    setCart([]);
+    setIsPaymentModalOpen(false);
+    setIsReceiptOpen(true);
+    setCashReceived(0);
+    setIsEnteringCash(false);
+  };
+
+  const handlePrintReceipt = async () => {
+    if (!lastTransaction) return;
+
+    // If it's still pending, save to Firestore first
+    if (lastTransaction.isPending) {
+      setIsSavingTransaction(true);
+      try {
+        const { isPending, ...dataToSave } = lastTransaction;
+        const docRef = await addDoc(collection(db, 'transactions'), {
+          ...dataToSave,
+          createdAt: serverTimestamp() // Use server timestamp for the actual record
+        });
+        
+        // Update local state with the real ID and server-like timestamp
+        setLastTransaction({
+          ...lastTransaction,
+          id: docRef.id,
+          isPending: false
+        });
+      } catch (err) {
+        console.error(err);
+        alert("Gagal menyimpan transaksi ke database.");
+        setIsSavingTransaction(false);
+        return;
+      }
+      setIsSavingTransaction(false);
     }
+
+    // Now print
+    setTimeout(() => {
+      window.print();
+    }, 100);
   };
 
   return (
@@ -823,15 +853,15 @@ export default function App() {
                     <UtensilsCrossed className="w-10 h-10" />
                   </div>
                   <h2 className="text-xl font-serif font-bold text-[#1a1a1a] leading-tight uppercase tracking-tight">Nasi pecel Madiun Mirah Echo</h2>
-                  <p className="text-[11px] text-[#555] font-medium mt-1">Jl. Jatikramat Indah 2 No.38c RT.005/RW.003 </p>
-                  <p className="text-[11px] text-[#555] font-medium">Telp: 0812-1882-4223</p>
+                  <p className="text-[11px] text-[#555] font-medium mt-1">Jl. Raya Madiun No. 88, Jawa Timur</p>
+                  <p className="text-[11px] text-[#555] font-medium">Telp: (021) 1234-5678</p>
                   <div className="my-5 border-t border-dashed border-[#d1d1c1] w-full" />
                 </div>
 
                 <div className="space-y-2 text-[11px] mb-6 font-mono">
                   <div className="flex text-[#333]">
                     <span className="w-28 text-left">No. Transaksi</span>
-                    <span className="flex-1 text-left font-bold">: {lastTransaction?.id?.slice(0, 10).toUpperCase()}</span>
+                    <span className="flex-1 text-left font-bold">: {lastTransaction?.isPending ? 'MENCETAK...' : lastTransaction?.id?.slice(0, 10).toUpperCase()}</span>
                   </div>
                   <div className="flex text-[#333]">
                     <span className="w-28 text-left">Tanggal</span>
@@ -893,17 +923,19 @@ export default function App() {
 
               <div className="shrink-0 w-full p-6 flex gap-2 border-t border-[#f0f0e8] bg-white print:hidden">
                 <button 
-                  onClick={() => window.print()}
-                  className="flex-1 bg-[#fdfbf7] border border-[#e5e5d1] hover:bg-[#f0f0e8] text-[#5A5A40] font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-all text-sm shadow-sm"
+                  onClick={handlePrintReceipt}
+                  disabled={isSavingTransaction}
+                  className="flex-1 bg-[#fdfbf7] border border-[#e5e5d1] hover:bg-[#f0f0e8] text-[#5A5A40] font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-all text-sm shadow-sm disabled:opacity-50"
                 >
                   <Printer className="w-4 h-4" />
-                  Cetak
+                  {isSavingTransaction ? 'Menyimpan...' : 'Cetak'}
                 </button>
                 <button 
                   onClick={() => setIsReceiptOpen(false)}
-                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-500 font-bold py-3 rounded-xl transition-all text-sm"
+                  disabled={isSavingTransaction}
+                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-500 font-bold py-3 rounded-xl transition-all text-sm disabled:opacity-50"
                 >
-                  Tutup
+                  {lastTransaction?.isPending ? 'Batal' : 'Tutup'}
                 </button>
               </div>
             </motion.div>
