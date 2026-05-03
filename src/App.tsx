@@ -297,6 +297,12 @@ export default function App() {
   };
 
   const deleteAllTransactions = async () => {
+    const password = prompt('Masukkan password untuk menghapus seluruh data:');
+    if (password !== 'MirahEcho12345') {
+      alert('Password salah!');
+      return;
+    }
+    
     if (!confirm('PERINGATAN: Ini akan menghapus SELURUH riwayat transaksi di database. Lanjutkan?')) return;
     try {
       const q = query(collection(db, 'transactions'));
