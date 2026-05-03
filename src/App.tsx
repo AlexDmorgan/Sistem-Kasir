@@ -56,7 +56,7 @@ import { id } from 'date-fns/locale';
 import { db, auth } from './lib/firebase';
 import { cn, formatCurrency } from './lib/utils';
 
-import * as XLSX from 'xlsx';
+import XLSX from 'xlsx-js-style';
 
 // Types
 interface MenuItem {
@@ -247,33 +247,68 @@ export default function App() {
         return;
       }
 
-      // Professional Headers
-      const reportHeader = [
-        ["LAPORAN PENJUALAN HARIAN"],
-        ["Restoran:", "Nasi pecel Madiun Mirah Echo"],
-        ["Tanggal Pelaporan:", selectedExportDate],
-        ["Waktu Ekspor:", format(new Date(), 'dd/MM/yyyy HH:mm')],
+      // Professional Headers with Styling
+      const headerStyle = {
+        font: { bold: true, color: { rgb: "FFFFFF" }, size: 14 },
+        fill: { fgColor: { rgb: "5A5A40" } },
+        alignment: { horizontal: "center", vertical: "center" }
+      };
+
+      const titleStyle = {
+        font: { bold: true, size: 18, color: { rgb: "2A2A1B" } },
+        alignment: { horizontal: "left" }
+      };
+
+      const labelStyle = {
+        font: { bold: true, color: { rgb: "8A8A70" } }
+      };
+
+      const dataStyle = {
+        font: { color: { rgb: "2A2A1B" } }
+      };
+
+      const footerStyle = {
+        font: { bold: true, color: { rgb: "FFFFFF" } },
+        fill: { fgColor: { rgb: "5A5A40" } }
+      };
+
+      // Construct Workbook using AOA with styles
+      const reportData: any[][] = [
+        [{ v: "LAPORAN PENJUALAN HARIAN", s: titleStyle }],
+        [{ v: "Restoran:", s: labelStyle }, { v: "Nasi pecel Madiun Mirah Echo", s: dataStyle }],
+        [{ v: "Tanggal Pelaporan:", s: labelStyle }, { v: selectedExportDate, s: dataStyle }],
+        [{ v: "Waktu Ekspor:", s: labelStyle }, { v: format(new Date(), 'dd/MM/yyyy HH:mm'), s: dataStyle }],
         [],
-        ["ID ORDER", "WAKTU", "METODE", "TOTAL (Rp)", "DITERIMA (Rp)", "KEMBALIAN (Rp)", "RINCIAN PESANAN"]
+        [
+          { v: "ID ORDER", s: headerStyle },
+          { v: "WAKTU", s: headerStyle },
+          { v: "METODE", s: headerStyle },
+          { v: "TOTAL (Rp)", s: headerStyle },
+          { v: "DITERIMA (Rp)", s: headerStyle },
+          { v: "KEMBALIAN (Rp)", s: headerStyle },
+          { v: "RINCIAN Pesanan", s: headerStyle }
+        ]
       ];
 
-      const transactionRows = transactions.map(d => [
-        d.id.slice(0, 10).toUpperCase(),
-        d.createdAt?.toDate() ? format(d.createdAt.toDate(), 'HH:mm') : '-',
-        d.paymentMethod,
-        d.total,
-        d.cashReceived || d.total,
-        d.change || 0,
-        d.items.map((i: any) => `${i.name} (x${i.quantity})`).join(', ')
-      ]);
+      transactions.forEach(d => {
+        reportData.push([
+          { v: d.id.slice(0, 10).toUpperCase(), s: dataStyle },
+          { v: d.createdAt?.toDate() ? format(d.createdAt.toDate(), 'HH:mm') : '-', s: dataStyle },
+          { v: d.paymentMethod, s: dataStyle },
+          { v: d.total, s: dataStyle, z: "#,##0" },
+          { v: d.cashReceived || d.total, s: dataStyle, z: "#,##0" },
+          { v: d.change || 0, s: dataStyle, z: "#,##0" },
+          { v: d.items.map((i: any) => `${i.name} (x${i.quantity})`).join(', '), s: dataStyle }
+        ]);
+      });
 
       const grandTotal = transactions.reduce((acc, curr) => acc + curr.total, 0);
-      const reportFooter = [
-        [],
-        ["", "", "TOTAL PENDAPATAN", grandTotal]
-      ];
+      reportData.push([]);
+      reportData.push([
+        "", "", { v: "TOTAL PENDAPATAN", s: footerStyle }, { v: grandTotal, s: footerStyle, z: "#,##0" }
+      ]);
 
-      const worksheet = XLSX.utils.aoa_to_sheet([...reportHeader, ...transactionRows, ...reportFooter]);
+      const worksheet = XLSX.utils.aoa_to_sheet(reportData);
 
       // Professional Column Widths
       const wscols = [
@@ -286,6 +321,11 @@ export default function App() {
         { wch: 60 }, // Rincian
       ];
       worksheet['!cols'] = wscols;
+
+      // Merge Title across 7 columns
+      worksheet['!merges'] = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 6 } }
+      ];
 
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "Laporan Penjualan");
