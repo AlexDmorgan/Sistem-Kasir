@@ -674,80 +674,80 @@ export default function App() {
               </div>
 
               <div className="flex-1 overflow-y-auto p-6 w-full scrollbar-hide printable-content bg-white">
-                <div className="text-center mb-4 flex flex-col items-center">
-                  <div className="text-[#5A5A40] mb-2 opacity-20">
-                    <UtensilsCrossed className="w-8 h-8" />
+                <div className="text-center mb-6 flex flex-col items-center">
+                  <div className="text-[#5A5A40] mb-3">
+                    <UtensilsCrossed className="w-10 h-10" />
                   </div>
                   <h2 className="text-xl font-serif font-bold text-[#1a1a1a] leading-tight uppercase tracking-tight">Nasi pecel Madiun Mirah Echo</h2>
-                  <p className="text-[10px] text-[#8a8a70] font-medium mt-1">Jl. Raya Madiun No. 88, Jawa Timur</p>
-                  <p className="text-[10px] text-[#8a8a70] font-medium">Telp: (021) 1234-5678</p>
-                  <div className="my-4 border-t border-dashed border-[#d1d1c1] w-full" />
+                  <p className="text-[11px] text-[#555] font-medium mt-1">Jl. Raya Madiun No. 88, Jawa Timur</p>
+                  <p className="text-[11px] text-[#555] font-medium">Telp: (021) 1234-5678</p>
+                  <div className="my-5 border-t border-dashed border-[#d1d1c1] w-full" />
                 </div>
 
-                <div className="space-y-1.5 text-[11px] mb-4 font-mono">
-                  <div className="flex justify-between text-[#555]">
-                    <span>No. Transaksi</span>
-                    <span className="text-[#000] font-bold">: {lastTransaction?.id?.slice(0, 10).toUpperCase()}</span>
+                <div className="space-y-2 text-[11px] mb-6 font-mono">
+                  <div className="flex text-[#333]">
+                    <span className="w-28 text-left">No. Transaksi</span>
+                    <span className="flex-1 text-left font-bold">: {lastTransaction?.id?.slice(0, 10).toUpperCase()}</span>
                   </div>
-                  <div className="flex justify-between text-[#555]">
-                    <span>Tanggal</span>
-                    <span className="text-[#000] font-bold">: {formatTransactionDate(lastTransaction?.createdAt, 'dd/MM/yyyy')}</span>
+                  <div className="flex text-[#333]">
+                    <span className="w-28 text-left">Tanggal</span>
+                    <span className="flex-1 text-left font-bold">: {formatTransactionDate(lastTransaction?.createdAt, 'dd/MM/yyyy')}</span>
                   </div>
-                  <div className="flex justify-between text-[#555]">
-                    <span>Waktu</span>
-                    <span className="text-[#000] font-bold">: {formatTransactionDate(lastTransaction?.createdAt, 'HH.mm')}</span>
+                  <div className="flex text-[#333]">
+                    <span className="w-28 text-left">Waktu</span>
+                    <span className="flex-1 text-left font-bold">: {formatTransactionDate(lastTransaction?.createdAt, 'HH.mm')}</span>
                   </div>
-                  <div className="flex justify-between text-[#555]">
-                    <span>Kasir</span>
-                    <span className="text-[#000] font-bold">: {user.displayName}</span>
+                  <div className="flex text-[#333]">
+                    <span className="w-28 text-left">Kasir</span>
+                    <span className="flex-1 text-left font-bold">: {user?.displayName || 'Kasir'}</span>
                   </div>
                 </div>
 
-                <div className="border-t border-dashed border-[#d1d1c1] py-3 mb-3">
+                <div className="border-t border-dashed border-[#d1d1c1] py-4 mb-4">
                   {lastTransaction?.items.map((item: any, idx: number) => (
-                    <div key={`receipt-item-${idx}`} className="flex justify-between text-[11px] mb-2 text-[#000] leading-relaxed font-mono">
+                    <div key={`receipt-item-${idx}`} className="flex justify-between text-[12px] mb-3 text-[#000] leading-relaxed font-mono">
                       <span className="flex-1 pr-4">{item.name} <span className="text-[#666] ml-1">×{item.quantity}</span></span>
                       <span className="font-bold shrink-0">{formatCurrency(item.price * item.quantity)}</span>
                     </div>
                   ))}
                 </div>
 
-                <div className="space-y-2 pt-3 border-t border-dashed border-[#d1d1c1] font-mono">
-                  <div className="flex justify-between text-[11px] text-[#555]">
+                <div className="space-y-3 pt-4 border-t border-dashed border-[#d1d1c1] font-mono">
+                  <div className="flex justify-between text-[11px] text-[#333]">
                     <span>Subtotal</span>
                     <span className="text-[#000] font-bold">{formatCurrency(lastTransaction?.total)}</span>
                   </div>
-                  <div className="flex justify-between text-[13px] pt-1 pb-1 border-y border-[#eee]">
+                  <div className="flex justify-between text-base pt-2 pb-2 border-y border-[#eee] mb-2">
                     <span className="font-black text-[#000]">TOTAL</span>
                     <span className="font-black text-[#5A5A40]">{formatCurrency(lastTransaction?.total)}</span>
                   </div>
                   
                   {lastTransaction?.paymentMethod === 'Cash' && (
-                    <>
-                      <div className="flex justify-between text-[11px] text-[#555] pt-1">
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-[11px] text-[#333]">
                         <span>Tunai Diterima</span>
                         <span className="text-[#000] font-bold">{formatCurrency(lastTransaction?.cashReceived)}</span>
                       </div>
-                      <div className="flex justify-between text-[11px] text-green-700 font-bold">
+                      <div className="flex justify-between text-[11px] text-green-700 font-bold border-t border-[#f0f0f0] pt-1">
                         <span>Kembalian</span>
                         <span>{formatCurrency(lastTransaction?.change)}</span>
                       </div>
-                    </>
+                    </div>
                   )}
                   
-                  <div className="flex justify-between text-[10px] text-[#8a8a70] pt-4 italic">
-                    <span>Metode Pembayaran: {lastTransaction?.paymentMethod}</span>
+                  <div className="flex justify-between text-[10px] text-[#999] pt-6 font-sans italic border-t border-[#f7f7f7]">
+                    <span>Metode: {lastTransaction?.paymentMethod}</span>
                   </div>
                 </div>
 
-                <div className="mt-8 text-center border-t border-dashed border-[#d1d1c1] pt-6 pb-2">
-                  <div className="flex justify-center gap-1 mb-2">
-                    <span className="text-yellow-500 text-xs">★</span>
-                    <p className="text-[10px] text-[#555] font-bold uppercase tracking-widest leading-tight">Terima Kasih</p>
-                    <span className="text-yellow-500 text-xs">★</span>
+                <div className="mt-10 text-center border-t border-dashed border-[#d1d1c1] pt-8 pb-4">
+                  <div className="flex justify-center items-center gap-2 mb-3">
+                    <span className="text-yellow-500 text-sm">★</span>
+                    <p className="text-[11px] text-[#1a1a1a] font-bold uppercase tracking-[0.2em] leading-tight">Terima Kasih</p>
+                    <span className="text-yellow-500 text-sm">★</span>
                   </div>
                   <p className="text-[10px] text-[#8a8a70] italic text-center mb-1">Selamat menikmati hidangan Anda!</p>
-                  <p className="text-[8px] text-[#aaa] text-center">Struk ini merupakan bukti pembayaran yang sah</p>
+                  <p className="text-[8px] text-[#ccc] text-center uppercase tracking-widest mt-2">Struk Pembayaran Sah</p>
                 </div>
               </div>
 
@@ -967,80 +967,68 @@ export default function App() {
             size: 80mm auto;
           }
           
-          html, body {
-            margin: 0 !important;
-            padding: 0 !important;
-            background: white !important;
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
+          /* Hide everything by default */
+          body * {
+            visibility: hidden !important;
           }
 
-          #root > *:not(.receipt-overlay) {
-            display: none !important;
+          /* Specifically show ONLY the receipt content and its necessary parents */
+          .receipt-overlay, 
+          .receipt-overlay * {
+            visibility: visible !important;
           }
 
           .receipt-overlay {
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            height: auto !important;
+            display: block !important;
             background: white !important;
-            padding: 0 !important;
-            position: fixed !important;
-            inset: 0 !important;
             z-index: 9999 !important;
-            display: flex !important;
-            align-items: flex-start !important;
-            justify-content: center !important;
-            overflow: visible !important;
           }
 
-          .receipt-overlay > *:not(#printable-receipt) {
+          /* Hide UI elements within overlay during print */
+          .receipt-overlay button,
+          .receipt-overlay .absolute.inset-0.bg-black\/80.backdrop-blur-md,
+          .print\:hidden {
             display: none !important;
+            visibility: hidden !important;
           }
 
           #printable-receipt {
-            visibility: visible !important;
             position: relative !important;
             width: 80mm !important;
-            max-width: none !important;
-            max-height: none !important;
-            height: auto !important;
-            margin: 0 !important;
+            margin: 0 auto !important;
             padding: 0 !important;
-            border: none !important;
-            box-shadow: none !important;
             display: block !important;
-            overflow: visible !important;
+            box-shadow: none !important;
+            border: none !important;
             background: white !important;
             transform: none !important;
             border-radius: 0 !important;
           }
 
-          #printable-receipt * {
-            visibility: visible !important;
-            color: black !important;
-          }
-
           .printable-content {
-            overflow: visible !important;
+            padding: 10mm 5mm !important;
             display: block !important;
+            overflow: visible !important;
+            height: auto !important;
             max-height: none !important;
-            padding: 10mm !important;
           }
 
           .print-header {
-            background-color: #5A5A40 !important;
-            color: white !important;
-            display: flex !important;
+            display: none !important; /* Hide the green banner in print to save ink */
           }
 
-          .print-header * {
-            color: white !important;
+          #printable-receipt * {
+            color: black !important;
+            font-family: 'JetBrains Mono', monospace !important;
           }
 
-          .print-header h3 {
-            color: white !important;
-          }
-
-          .print\:hidden {
-            display: none !important;
+          .text-green-700 {
+            color: black !important;
           }
         }
       `}</style>
