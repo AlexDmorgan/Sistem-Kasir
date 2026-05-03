@@ -1018,40 +1018,30 @@ export default function App() {
             size: 80mm auto;
           }
           
-          /* Hide everything by default */
-          body * {
-            visibility: hidden !important;
-          }
-
-          /* Specifically show ONLY the receipt content and its necessary parents */
-          .receipt-overlay, 
-          .receipt-overlay * {
-            visibility: visible !important;
+          /* Force hide everything except the receipt */
+          body > #root > *:not(.receipt-overlay),
+          .receipt-overlay > *:not(div:last-child),
+          .receipt-overlay button,
+          .print\:hidden {
+            display: none !important;
           }
 
           .receipt-overlay {
-            position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
+            position: fixed !important;
+            inset: 0 !important;
             width: 100% !important;
             height: auto !important;
-            display: block !important;
             background: white !important;
-            z-index: 9999 !important;
-          }
-
-          /* Hide UI elements within overlay during print */
-          .receipt-overlay button,
-          .receipt-overlay .absolute.inset-0.bg-black\/80.backdrop-blur-md,
-          .print\:hidden {
-            display: none !important;
-            visibility: hidden !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            display: block !important;
+            overflow: visible !important;
           }
 
           #printable-receipt {
             position: relative !important;
             width: 80mm !important;
-            margin: 0 auto !important;
+            margin: 0 !important;
             padding: 0 !important;
             display: block !important;
             box-shadow: none !important;
@@ -1059,10 +1049,12 @@ export default function App() {
             background: white !important;
             transform: none !important;
             border-radius: 0 !important;
+            max-width: none !important;
+            max-height: none !important;
           }
 
           .printable-content {
-            padding: 10mm 5mm !important;
+            padding: 5mm 3mm !important;
             display: block !important;
             overflow: visible !important;
             height: auto !important;
@@ -1070,16 +1062,23 @@ export default function App() {
           }
 
           .print-header {
-            display: none !important; /* Hide the green banner in print to save ink */
+            display: none !important;
           }
 
           #printable-receipt * {
             color: black !important;
             font-family: 'JetBrains Mono', monospace !important;
+            font-size: 10pt !important;
+            line-height: 1.2 !important;
           }
 
-          .text-green-700 {
+          .text-green-700, .text-[#5A5A40] {
             color: black !important;
+          }
+          
+          /* Ensure text isn't cut off horizontally */
+          .flex {
+            display: flex !important;
           }
         }
       `}</style>
