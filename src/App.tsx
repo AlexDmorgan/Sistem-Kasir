@@ -295,6 +295,17 @@ export default function App() {
     setCashReceived(0);
   };
 
+  const formatTransactionDate = (timestamp: any, pattern: string) => {
+    try {
+      if (!timestamp) return format(new Date(), pattern);
+      if (typeof timestamp.toDate === 'function') return format(timestamp.toDate(), pattern);
+      if (timestamp instanceof Date) return format(timestamp, pattern);
+      return format(new Date(), pattern);
+    } catch (e) {
+      return format(new Date(), pattern);
+    }
+  };
+
   const processPayment = async (method: 'Cash' | 'QRIS') => {
     if (method === 'Cash' && !isEnteringCash) {
       setIsEnteringCash(true);
@@ -322,6 +333,7 @@ export default function App() {
       setIsEnteringCash(false);
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, 'transactions');
+      alert("Gagal memproses transaksi. Coba lagi.");
     }
   };
 
@@ -637,7 +649,7 @@ export default function App() {
       {/* Receipt Modal (Success) */}
       <AnimatePresence>
         {isReceiptOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 receipt-overlay">
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -649,80 +661,93 @@ export default function App() {
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.9 }}
-              className="relative bg-white rounded-[32px] p-0 max-w-[320px] w-full shadow-2xl overflow-hidden flex flex-col items-center border border-[#f0f0e8] max-h-[90vh]"
+              className="relative bg-white rounded-[32px] p-0 max-w-[340px] w-full shadow-2xl overflow-hidden flex flex-col items-center border border-[#f0f0e8] max-h-[90vh]"
             >
               <div className="shrink-0 w-full bg-[#5A5A40] py-4 flex flex-col items-center relative overflow-hidden print-header">
                 <div className="absolute inset-0 opacity-5 flex flex-wrap gap-1 pointer-events-none">
                   {[...Array(12)].map((_, i) => <ChefHat key={i} className="w-6 h-6 text-white" />)}
                 </div>
-                <div className="w-10 h-10 bg-white/10 backdrop-blur-md rounded-xl flex items-center justify-center text-white mb-1">
-                  <ChefHat className="w-5 h-5 shadow-sm" />
+                <div className="w-10 h-10 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center mb-1 ring-4 ring-white/10 ring-offset-2 ring-offset-[#5A5A40]">
+                  <ChefHat className="w-5 h-5 shadow-sm text-white" />
                 </div>
-                <h3 className="text-white font-serif font-bold text-lg">Kasir Kita</h3>
+                <h3 className="text-white font-serif font-bold text-lg">Mirah Echo</h3>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-6 w-full scrollbar-hide printable-content">
+              <div className="flex-1 overflow-y-auto p-6 w-full scrollbar-hide printable-content bg-white">
                 <div className="text-center mb-4 flex flex-col items-center">
-                  <h2 className="text-xl font-serif font-bold text-[#2a2a1b] leading-tight">STRUK BELANJA</h2>
-                  <p className="text-[10px] text-[#8a8a70] font-medium italic">Sistem POS Restoran Modern</p>
-                  <div className="my-3 border-t border-dashed border-[#e5e5d1] w-full" />
+                  <div className="text-[#5A5A40] mb-2 opacity-20">
+                    <UtensilsCrossed className="w-8 h-8" />
+                  </div>
+                  <h2 className="text-xl font-serif font-bold text-[#1a1a1a] leading-tight uppercase tracking-tight">Nasi pecel Madiun Mirah Echo</h2>
+                  <p className="text-[10px] text-[#8a8a70] font-medium mt-1">Jl. Raya Madiun No. 88, Jawa Timur</p>
+                  <p className="text-[10px] text-[#8a8a70] font-medium">Telp: (021) 1234-5678</p>
+                  <div className="my-4 border-t border-dashed border-[#d1d1c1] w-full" />
                 </div>
 
-                <div className="space-y-1.5 text-[11px] mb-4">
-                  <div className="flex justify-between text-[#8a8a70]">
+                <div className="space-y-1.5 text-[11px] mb-4 font-mono">
+                  <div className="flex justify-between text-[#555]">
                     <span>No. Transaksi</span>
-                    <span className="text-[#2a2a1b] font-bold">#{lastTransaction?.id?.slice(0, 10)}</span>
+                    <span className="text-[#000] font-bold">: {lastTransaction?.id?.slice(0, 10).toUpperCase()}</span>
                   </div>
-                  <div className="flex justify-between text-[#8a8a70]">
+                  <div className="flex justify-between text-[#555]">
                     <span>Tanggal</span>
-                    <span className="text-[#2a2a1b] font-bold">{format(lastTransaction?.createdAt || new Date(), 'dd/MM/yyyy HH:mm')}</span>
+                    <span className="text-[#000] font-bold">: {formatTransactionDate(lastTransaction?.createdAt, 'dd/MM/yyyy')}</span>
                   </div>
-                  <div className="flex justify-between text-[#8a8a70]">
+                  <div className="flex justify-between text-[#555]">
+                    <span>Waktu</span>
+                    <span className="text-[#000] font-bold">: {formatTransactionDate(lastTransaction?.createdAt, 'HH.mm')}</span>
+                  </div>
+                  <div className="flex justify-between text-[#555]">
                     <span>Kasir</span>
-                    <span className="text-[#2a2a1b] font-bold">{user.displayName}</span>
+                    <span className="text-[#000] font-bold">: {user.displayName}</span>
                   </div>
                 </div>
 
-                <div className="border-t border-dashed border-[#e5e5d1] py-3 mb-3">
+                <div className="border-t border-dashed border-[#d1d1c1] py-3 mb-3">
                   {lastTransaction?.items.map((item: any, idx: number) => (
-                    <div key={`receipt-item-${idx}`} className="flex justify-between text-[11px] mb-2 text-[#3d3d3d] leading-relaxed">
-                      <span className="flex-1 pr-4">{item.name} <span className="text-[#8a8a70] ml-1">x{item.quantity}</span></span>
+                    <div key={`receipt-item-${idx}`} className="flex justify-between text-[11px] mb-2 text-[#000] leading-relaxed font-mono">
+                      <span className="flex-1 pr-4">{item.name} <span className="text-[#666] ml-1">×{item.quantity}</span></span>
                       <span className="font-bold shrink-0">{formatCurrency(item.price * item.quantity)}</span>
                     </div>
                   ))}
                 </div>
 
-                <div className="space-y-1.5 pt-3 border-t border-dashed border-[#e5e5d1]">
-                  <div className="flex justify-between text-[11px] text-[#8a8a70]">
+                <div className="space-y-2 pt-3 border-t border-dashed border-[#d1d1c1] font-mono">
+                  <div className="flex justify-between text-[11px] text-[#555]">
                     <span>Subtotal</span>
-                    <span className="text-[#2a2a1b] font-bold">{formatCurrency(lastTransaction?.total)}</span>
+                    <span className="text-[#000] font-bold">{formatCurrency(lastTransaction?.total)}</span>
                   </div>
-                  <div className="flex justify-between text-sm pt-2">
-                    <span className="font-bold text-[#2a2a1b]">TOTAL</span>
-                    <span className="font-serif font-black text-[#5A5A40] text-lg">{formatCurrency(lastTransaction?.total)}</span>
+                  <div className="flex justify-between text-[13px] pt-1 pb-1 border-y border-[#eee]">
+                    <span className="font-black text-[#000]">TOTAL</span>
+                    <span className="font-black text-[#5A5A40]">{formatCurrency(lastTransaction?.total)}</span>
                   </div>
                   
                   {lastTransaction?.paymentMethod === 'Cash' && (
                     <>
-                      <div className="flex justify-between text-[11px] text-[#8a8a70] pt-1">
+                      <div className="flex justify-between text-[11px] text-[#555] pt-1">
                         <span>Tunai Diterima</span>
-                        <span className="text-[#2a2a1b] font-bold">{formatCurrency(lastTransaction?.cashReceived)}</span>
+                        <span className="text-[#000] font-bold">{formatCurrency(lastTransaction?.cashReceived)}</span>
                       </div>
-                      <div className="flex justify-between text-[11px] text-green-600 font-bold pt-0.5">
+                      <div className="flex justify-between text-[11px] text-green-700 font-bold">
                         <span>Kembalian</span>
                         <span>{formatCurrency(lastTransaction?.change)}</span>
                       </div>
                     </>
                   )}
                   
-                  <div className="flex justify-between text-[10px] text-[#8a8a70] pt-2 italic">
-                    <span>Metode: {lastTransaction?.paymentMethod}</span>
+                  <div className="flex justify-between text-[10px] text-[#8a8a70] pt-4 italic">
+                    <span>Metode Pembayaran: {lastTransaction?.paymentMethod}</span>
                   </div>
                 </div>
 
-                <div className="mt-6 text-center border-t border-dashed border-[#e5e5d1] pt-4 pb-2">
-                  <p className="text-[10px] text-[#8a8a70] font-bold uppercase tracking-widest leading-tight">Terima Kasih</p>
-                  <p className="text-[10px] text-[#8a8a70] italic text-center">Selamat menikmati hidangan Anda!</p>
+                <div className="mt-8 text-center border-t border-dashed border-[#d1d1c1] pt-6 pb-2">
+                  <div className="flex justify-center gap-1 mb-2">
+                    <span className="text-yellow-500 text-xs">★</span>
+                    <p className="text-[10px] text-[#555] font-bold uppercase tracking-widest leading-tight">Terima Kasih</p>
+                    <span className="text-yellow-500 text-xs">★</span>
+                  </div>
+                  <p className="text-[10px] text-[#8a8a70] italic text-center mb-1">Selamat menikmati hidangan Anda!</p>
+                  <p className="text-[8px] text-[#aaa] text-center">Struk ini merupakan bukti pembayaran yang sah</p>
                 </div>
               </div>
 
@@ -946,33 +971,46 @@ export default function App() {
             margin: 0 !important;
             padding: 0 !important;
             background: white !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
           }
 
-          #root > *:not(#printable-receipt-wrapper) {
+          #root > *:not(.receipt-overlay) {
             display: none !important;
           }
 
-          /* Hide everything by default during print */
-          body > * {
-            visibility: hidden !important;
+          .receipt-overlay {
+            background: white !important;
+            padding: 0 !important;
+            position: fixed !important;
+            inset: 0 !important;
+            z-index: 9999 !important;
+            display: flex !important;
+            align-items: flex-start !important;
+            justify-content: center !important;
+            overflow: visible !important;
           }
-          
-          /* Only show the receipt */
+
+          .receipt-overlay > *:not(#printable-receipt) {
+            display: none !important;
+          }
+
           #printable-receipt {
             visibility: visible !important;
-            position: absolute !important;
-            left: 0 !important;
-            top: 0 !important;
-            width: 100% !important;
+            position: relative !important;
+            width: 80mm !important;
             max-width: none !important;
             max-height: none !important;
             height: auto !important;
             margin: 0 !important;
-            padding: 20px !important;
+            padding: 0 !important;
             border: none !important;
             box-shadow: none !important;
             display: block !important;
             overflow: visible !important;
+            background: white !important;
+            transform: none !important;
+            border-radius: 0 !important;
           }
 
           #printable-receipt * {
@@ -980,21 +1018,24 @@ export default function App() {
             color: black !important;
           }
 
-          /* Ensure scrollable area is fully visible in print */
           .printable-content {
             overflow: visible !important;
             display: block !important;
             max-height: none !important;
+            padding: 10mm !important;
           }
 
           .print-header {
             background-color: #5A5A40 !important;
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
             color: white !important;
+            display: flex !important;
           }
 
           .print-header * {
+            color: white !important;
+          }
+
+          .print-header h3 {
             color: white !important;
           }
 
