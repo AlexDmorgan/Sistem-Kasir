@@ -45,9 +45,6 @@ import {
   FileText,
   Image as ImageIcon,
   Upload,
-  ListChecks,
-  CheckCircle2,
-  Clock,
   Lock,
   User as UserIcon,
   Eye,
@@ -131,8 +128,7 @@ export default function App() {
   const [isSavingTransaction, setIsSavingTransaction] = useState(false);
   const [isAdmin, setIsAdmin] = useState(true);
   const [isManagementOpen, setIsManagementOpen] = useState(false);
-  const [managementTab, setManagementTab] = useState<'Menu' | 'Transaksi' | 'Antrian'>('Antrian');
-  const [queue, setQueue] = useState<any[]>([]);
+  const [managementTab, setManagementTab] = useState<'Menu' | 'Transaksi'>('Menu');
   const [editingItem, setEditingItem] = useState<Partial<MenuItem> | null>(null);
   const [cashReceived, setCashReceived] = useState<number>(0);
   const [isEnteringCash, setIsEnteringCash] = useState(false);
@@ -165,23 +161,6 @@ export default function App() {
         seedInitialMenu();
       }
     }, (err) => handleFirestoreError(err, OperationType.GET, 'menu'));
-
-    return () => unsubscribe();
-  }, [isAuthenticated]);
-
-  // Queue Listener
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    const q = query(
-      collection(db, 'transactions'),
-      orderBy('createdAt', 'asc')
-    );
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const items = snapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() }))
-        .filter((item: any) => item.status === 'waiting');
-      setQueue(items);
-    }, (err) => handleFirestoreError(err, OperationType.GET, 'transactions'));
 
     return () => unsubscribe();
   }, [isAuthenticated]);
@@ -459,15 +438,6 @@ export default function App() {
     }
   };
 
-  const updateQueueStatus = async (id: string, status: 'waiting' | 'done') => {
-    try {
-      await updateDoc(doc(db, 'transactions', id), { status });
-    } catch (err) {
-      console.error(err);
-      alert("Gagal memperbarui antrian.");
-    }
-  };
-
   const filteredMenu = useMemo(() => {
     return menu.filter(item => {
       const matchesCategory = activeCategory === 'Semua' || item.category === activeCategory;
@@ -696,11 +666,6 @@ export default function App() {
               className="p-3 rounded-2xl text-white/60 hover:bg-white/5 relative"
             >
               <SettingsIcon className="w-6 h-6" />
-              {queue.length > 0 && (
-                <span className="absolute top-2 right-2 w-4 h-4 bg-red-500 text-white text-[10px] font-black rounded-full flex items-center justify-center animate-pulse">
-                  {queue.length}
-                </span>
-              )}
             </button>
           )}
           <button 
@@ -768,6 +733,7 @@ export default function App() {
                     </div>
                   </div>
                   <h3 className="font-bold text-[#2a2a1b] text-sm lg:text-base mb-1 line-clamp-1 group-hover:text-[#5A5A40] transition-colors">{item.name}</h3>
+                  <p className="text-[#8a8a70] text-[10px] italic mb-2 line-clamp-1 opacity-70">Pilihan favorit pelanggan</p>
                   <p className="font-serif font-black text-base lg:text-lg text-[#5A5A40]">{formatCurrency(item.price)}</p>
                   
                   <div className="absolute right-3 lg:right-4 bottom-3 lg:bottom-4 w-8 lg:w-9 h-8 lg:h-9 bg-[#5A5A40] text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 transition-all shadow-md shadow-[#5a5a40]/40">
@@ -1123,17 +1089,6 @@ export default function App() {
                   >
                     Transaksi
                   </button>
-                  <button 
-                    onClick={() => setManagementTab('Antrian')}
-                    className={cn("px-4 py-2 rounded-xl font-bold text-sm relative", managementTab === 'Antrian' ? "bg-[#5A5A40] text-white" : "bg-gray-100 text-gray-500")}
-                  >
-                    Antrian
-                    {queue.length > 0 && (
-                      <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[10px] font-black rounded-full flex items-center justify-center border-2 border-white">
-                        {queue.length}
-                      </span>
-                    )}
-                  </button>
                 </div>
                 <button onClick={() => setIsManagementOpen(false)} className="p-2 hover:bg-gray-100 rounded-full">
                   <X className="w-6 h-6" />
@@ -1141,62 +1096,6 @@ export default function App() {
               </div>
 
               <div className="flex-1 overflow-y-auto p-6">
-                {managementTab === 'Antrian' && (
-                  <div className="space-y-6">
-                    <div className="flex justify-between items-center">
-                      <h3 className="font-bold flex items-center gap-2">
-                        <Clock className="w-5 h-5 text-[#5A5A40]" />
-                        Pesanan Aktif ({queue.length})
-                      </h3>
-                      <p className="text-xs text-[#8a8a70] italic">Klik centang jika pesanan sudah disajikan</p>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {queue.length === 0 ? (
-                        <div className="col-span-full py-20 flex flex-col items-center justify-center text-center opacity-30 grayscale">
-                          <ListChecks className="w-16 h-16 mb-4" />
-                          <p className="font-bold">Tidak ada antrian</p>
-                          <p className="text-sm">Semua pesanan sudah selesai disajikan</p>
-                        </div>
-                      ) : (
-                        queue.map((item: any) => (
-                          <div key={item.id} className="p-5 bg-[#fdfbf7] border border-[#e5e5d1] rounded-[28px] flex flex-col gap-4 relative group">
-                            <div className="flex justify-between items-start">
-                              <div>
-                                <p className="text-[10px] font-black text-[#5A5A40] uppercase tracking-widest mb-1">
-                                  Order #{item.id.slice(0, 8).toUpperCase()}
-                                </p>
-                                <p className="text-xs text-gray-400">
-                                  {formatTransactionDate(item.createdAt, 'HH:mm')} • {item.paymentMethod}
-                                </p>
-                              </div>
-                              <button 
-                                onClick={() => updateQueueStatus(item.id, 'done')}
-                                className="w-12 h-12 bg-white border border-[#e5e5d1] rounded-2xl flex items-center justify-center text-green-600 hover:bg-green-600 hover:text-white transition-all shadow-sm"
-                              >
-                                <CheckCircle2 className="w-6 h-6" />
-                              </button>
-                            </div>
-
-                            <div className="space-y-2">
-                              {item.items.map((prod: any, idx: number) => (
-                                <div key={idx} className="flex justify-between items-center text-sm">
-                                  <span className="font-bold text-[#2a2a1b]">
-                                    {prod.name}
-                                  </span>
-                                  <span className="px-2 py-0.5 bg-white border border-[#f0f0e8] rounded-lg text-[11px] font-bold">
-                                    x{prod.quantity}
-                                  </span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                )}
-
                 {managementTab === 'Menu' && (
                   <div className="space-y-6">
                     <div className="flex justify-between items-center">
