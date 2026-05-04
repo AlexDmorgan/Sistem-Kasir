@@ -732,9 +732,8 @@ export default function App() {
                       <p className="text-[9px] font-black text-[#5A5A40] uppercase tracking-wider">{item.category}</p>
                     </div>
                   </div>
-                  <h3 className="font-bold text-[#2a2a1b] text-sm lg:text-base mb-1 line-clamp-1 group-hover:text-[#5A5A40] transition-colors">{item.name}</h3>
-                  <p className="text-[#8a8a70] text-[10px] italic mb-2 line-clamp-1 opacity-70">Pilihan favorit pelanggan</p>
-                  <p className="font-serif font-black text-base lg:text-lg text-[#5A5A40]">{formatCurrency(item.price)}</p>
+                  <h3 className="font-bold text-[#2a2a1b] text-sm lg:text-base mb-2 line-clamp-1 group-hover:text-[#5A5A40] transition-colors">{item.name}</h3>
+                  <p className="font-sans font-bold text-base lg:text-lg text-[#5A5A40] tracking-tight">{formatCurrency(item.price)}</p>
                   
                   <div className="absolute right-3 lg:right-4 bottom-3 lg:bottom-4 w-8 lg:w-9 h-8 lg:h-9 bg-[#5A5A40] text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 transition-all shadow-md shadow-[#5a5a40]/40">
                     <Plus className="w-4 h-4" />
@@ -778,7 +777,7 @@ export default function App() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <h4 className="font-bold text-sm truncate text-[#2a2a1b]">{item.name}</h4>
-                  <p className="font-serif font-bold text-[#5A5A40] text-sm">{formatCurrency(item.price)}</p>
+                  <p className="font-sans font-bold text-[#5A5A40] text-sm tracking-tight">{formatCurrency(item.price)}</p>
                   <div className="flex items-center gap-4 mt-2">
                     <div className="flex items-center bg-[#fdfbf7] border border-[#e5e5d1] rounded-xl p-1">
                       <button 
@@ -816,7 +815,7 @@ export default function App() {
             </div>
             <div className="pt-3 border-t border-dashed border-[#e5e5d1] flex justify-between items-center">
               <span className="text-lg font-bold text-[#2a2a1b]">Total Bayar</span>
-              <span className="text-2xl font-serif font-bold text-[#5A5A40]">{formatCurrency(cartTotal)}</span>
+              <span className="text-2xl font-sans font-bold text-[#5A5A40] tracking-tight">{formatCurrency(cartTotal)}</span>
             </div>
           </div>
           
@@ -927,7 +926,7 @@ export default function App() {
 
               <div className="mt-8 pt-8 border-t border-dashed border-[#e5e5d1] text-center">
                 <p className="text-xs text-[#8a8a70] mb-1 font-bold uppercase tracking-widest">Total Pesanan</p>
-                <p className="text-4xl font-serif font-bold text-[#5A5A40]">{formatCurrency(cartTotal)}</p>
+                <p className="text-4xl font-sans font-bold text-[#5A5A40] tracking-tight">{formatCurrency(cartTotal)}</p>
               </div>
             </motion.div>
           </div>
