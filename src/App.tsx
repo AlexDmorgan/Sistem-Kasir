@@ -768,7 +768,6 @@ export default function App() {
                     </div>
                   </div>
                   <h3 className="font-bold text-[#2a2a1b] text-sm lg:text-base mb-1 line-clamp-1 group-hover:text-[#5A5A40] transition-colors">{item.name}</h3>
-                  <p className="text-[#8a8a70] text-[10px] italic mb-2 line-clamp-1 opacity-70">Pilihan favorit pelanggan</p>
                   <p className="font-serif font-black text-base lg:text-lg text-[#5A5A40]">{formatCurrency(item.price)}</p>
                   
                   <div className="absolute right-3 lg:right-4 bottom-3 lg:bottom-4 w-8 lg:w-9 h-8 lg:h-9 bg-[#5A5A40] text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 translate-y-2 group-hover:translate-y-0 transition-all shadow-md shadow-[#5a5a40]/40">
